@@ -35,10 +35,11 @@ data RequestDesc = RequestDesc
  , path :: String
  , query :: String
  , headers :: Object
+ , body :: Maybe Object
  } deriving (Show, Eq)
 
 instance FromJSON RequestDesc where
-  parseJSON (Object v) = RequestDesc <$> v .: "method" <*> v .: "path" <*> v .: "query" <*> v .: "headers"
+  parseJSON (Object v) = RequestDesc <$> v .: "method" <*> v .: "path" <*> v .: "query" <*> v .: "headers" <*> v .:? "body"
 
 type Diff = Bool
 
@@ -47,12 +48,14 @@ tests =
  [ "/method/different method.json"
  , "/method/matches.json"
  , "/method/method is different case.json"
+
  , "/path/empty path found when forward slash expected.json"
  , "/path/forward slash found when empty path expected.json"
  , "/path/incorrect path.json"
  , "/path/matches.json"
  , "/path/missing trailing slash in path.json"
  , "/path/unexpected trailing slash in path.json"
+
  , "/query/different order.json"
  , "/query/different params.json"
  , "/query/matches.json"
@@ -62,6 +65,7 @@ tests =
  , "/query/same parameter multiple times.json"
  , "/query/trailing ampersand.json"
  , "/query/unexpected param.json"
+
  , "/headers/empty headers.json"
  , "/headers/header name is different case.json"
  , "/headers/header value is different case.json"
@@ -69,6 +73,25 @@ tests =
  , "/headers/order of comma separated header values different.json"
  , "/headers/unexpected header found.json"
  , "/headers/whitespace after comma different.json"
+
+ , "/body/array in different order.json"
+ , "/body/different value found at index.json"
+ , "/body/different value found at key.json"
+ , "/body/matches.json"
+ , "/body/missing index.json"
+ , "/body/missing key.json"
+ , "/body/not null found at key when null expected.json"
+ , "/body/not null found in array when null expected.json"
+ , "/body/null found at key where not null expected.json"
+ , "/body/null found in array when not null expected.json"
+ , "/body/number found at key when string expected.json"
+ , "/body/number found in array when string expected.json"
+ , "/body/string found at key when number expected.json"
+ , "/body/string found in array when number expected.json"
+ , "/body/unexpected index with not null value.json"
+ , "/body/unexpected index with null value.json"
+ , "/body/unexpected key with not null value.json"
+ , "/body/unexpected key with null value.json"
  ]
 
 main :: IO ()
@@ -80,6 +103,7 @@ verifyRequest expected actual = foldl1 (&&)
  , verifyPath (path expected) (path actual)
  , verifyQuery (query expected) (query actual)
  , verifyHeaders (headers expected) (headers actual)
+ , verifyBody (body expected) (body actual)
  ]
 
 verifyMethod :: String -> String -> Diff
@@ -97,3 +121,8 @@ verifyHeaders :: Object -> Object -> Diff
 verifyHeaders expected actual = sanitize expected == sanitize (HM.intersection actual expected)
   where sanitize obj = HM.fromList $ map (\(k,v) -> (T.toLower k, fixValue v)) $ HM.toList obj
         fixValue (String v) = T.filter (/= ' ') v
+
+verifyBody :: Maybe Object -> Maybe Object -> Diff
+verifyBody Nothing _ = True
+verifyBody (Just expected) Nothing = False
+verifyBody (Just expected) (Just actual) = expected == (HM.intersection actual expected)
