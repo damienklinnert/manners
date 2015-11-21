@@ -1,5 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Pact where
+module Pact
+ ( Request,
+   Diff,
+   diffRequests
+ ) where
 
 import Data.Char (toUpper)
 import qualified Data.Text as T
@@ -11,11 +15,54 @@ import qualified Network.HTTP.Types as H
 import qualified Data.HashMap.Strict as HM
 import Data.Aeson
 
+data Request = Request
+ { method :: String
+ , path :: String
+ , query :: String
+ , headers :: Object
+ , body :: Maybe Object
+ } deriving (Show, Eq)
+
+instance FromJSON Request where
+  parseJSON (Object v) = Request <$> v .: "method" <*> v .: "path" <*> v .: "query" <*> v .: "headers" <*> v .:? "body"
+
+type Diff = Bool
+
+diffRequests :: Request -> Request -> Diff
+diffRequests expected actual = foldl1 (&&)
+ [ verifyMethod (method expected) (method actual)
+ , verifyPath (path expected) (path actual)
+ , verifyQuery (query expected) (query actual)
+ , verifyHeaders (headers expected) (headers actual)
+ , verifyBody (body expected) (body actual)
+ ]
+
+verifyMethod :: String -> String -> Diff
+verifyMethod expected actual = uppercase expected == uppercase actual
+  where uppercase = map toUpper
+
+verifyPath :: String -> String -> Diff
+verifyPath = (==)
+
+verifyQuery :: String -> String -> Diff
+verifyQuery expected actual = toQ expected == toQ actual
+  where toQ s = L.sortOn fst $ H.parseSimpleQuery (CS.pack s)
+
+verifyHeaders :: Object -> Object -> Diff
+verifyHeaders expected actual = sanitize expected == (HM.intersection (sanitize actual) (sanitize expected))
+  where sanitize obj = HM.fromList $ map (\(k,v) -> (T.toLower k, fixValue v)) $ HM.toList obj
+        fixValue (String v) = T.filter (/= ' ') v
+
+verifyBody :: Maybe Object -> Maybe Object -> Diff
+verifyBody Nothing _ = True
+verifyBody (Just expected) Nothing = False
+verifyBody (Just expected) (Just actual) = expected == (HM.intersection actual expected)
+
 data TestCase = TestCase
  { match :: Bool
  , comment :: String
- , expected :: RequestDesc
- , actual :: RequestDesc
+ , expected :: Request
+ , actual :: Request
  } deriving (Show, Eq)
 
 instance FromJSON TestCase where
@@ -27,21 +74,8 @@ checkCase file = do
   let (Just x) = decode methodDifferent :: Maybe TestCase
   let exp = (expected x)
   let act = (actual x)
-  let matches = verifyRequest exp act
+  let matches = diffRequests exp act
   putStrLn $ (if matches == (match x) then "WIN " else "FAIL ") ++ file
-
-data RequestDesc = RequestDesc
- { method :: String
- , path :: String
- , query :: String
- , headers :: Object
- , body :: Maybe Object
- } deriving (Show, Eq)
-
-instance FromJSON RequestDesc where
-  parseJSON (Object v) = RequestDesc <$> v .: "method" <*> v .: "path" <*> v .: "query" <*> v .: "headers" <*> v .:? "body"
-
-type Diff = Bool
 
 testBase = "resources/pact_specification_v1.1/testcases/request"
 tests =
@@ -96,33 +130,3 @@ tests =
 
 main :: IO ()
 main = mapM_ (checkCase . (testBase ++)) tests
-
-verifyRequest :: RequestDesc -> RequestDesc -> Diff
-verifyRequest expected actual = foldl1 (&&)
- [ verifyMethod (method expected) (method actual)
- , verifyPath (path expected) (path actual)
- , verifyQuery (query expected) (query actual)
- , verifyHeaders (headers expected) (headers actual)
- , verifyBody (body expected) (body actual)
- ]
-
-verifyMethod :: String -> String -> Diff
-verifyMethod expected actual = uppercase expected == uppercase actual
-  where uppercase = map toUpper
-
-verifyPath :: String -> String -> Diff
-verifyPath = (==)
-
-verifyQuery :: String -> String -> Diff
-verifyQuery expected actual = toQ expected == toQ actual
-  where toQ s = L.sortOn fst $ H.parseSimpleQuery (CS.pack s)
-
-verifyHeaders :: Object -> Object -> Diff
-verifyHeaders expected actual = sanitize expected == (HM.intersection (sanitize actual) (sanitize expected))
-  where sanitize obj = HM.fromList $ map (\(k,v) -> (T.toLower k, fixValue v)) $ HM.toList obj
-        fixValue (String v) = T.filter (/= ' ') v
-
-verifyBody :: Maybe Object -> Maybe Object -> Diff
-verifyBody Nothing _ = True
-verifyBody (Just expected) Nothing = False
-verifyBody (Just expected) (Just actual) = expected == (HM.intersection actual expected)
