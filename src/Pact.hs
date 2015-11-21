@@ -2,11 +2,13 @@
 module Pact where
 
 import Data.Char (toUpper)
+import qualified Data.Text as T
 import qualified Data.List as L
 import qualified Data.ByteString.Char8 as CS
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 import qualified Network.HTTP.Types as H
+import qualified Data.HashMap.Strict as HM
 import Data.Aeson
 
 data TestCase = TestCase
@@ -32,7 +34,7 @@ data RequestDesc = RequestDesc
  { method :: String
  , path :: String
  , query :: String
- , headers :: Value
+ , headers :: Object
  } deriving (Show, Eq)
 
 instance FromJSON RequestDesc where
@@ -60,6 +62,13 @@ tests =
  , "/query/same parameter multiple times.json"
  , "/query/trailing ampersand.json"
  , "/query/unexpected param.json"
+ , "/headers/empty headers.json"
+ , "/headers/header name is different case.json"
+ , "/headers/header value is different case.json"
+ , "/headers/matches.json"
+ , "/headers/order of comma separated header values different.json"
+ , "/headers/unexpected header found.json"
+ , "/headers/whitespace after comma different.json"
  ]
 
 main :: IO ()
@@ -70,6 +79,7 @@ verifyRequest expected actual = foldl1 (&&)
  [ verifyMethod (method expected) (method actual)
  , verifyPath (path expected) (path actual)
  , verifyQuery (query expected) (query actual)
+ , verifyHeaders (headers expected) (headers actual)
  ]
 
 verifyMethod :: String -> String -> Diff
@@ -82,3 +92,8 @@ verifyPath = (==)
 verifyQuery :: String -> String -> Diff
 verifyQuery expected actual = toQ expected == toQ actual
   where toQ s = L.sortOn fst $ H.parseSimpleQuery (CS.pack s)
+
+verifyHeaders :: Object -> Object -> Diff
+verifyHeaders expected actual = sanitize expected == sanitize (HM.intersection actual expected)
+  where sanitize obj = HM.fromList $ map (\(k,v) -> (T.toLower k, fixValue v)) $ HM.toList obj
+        fixValue (String v) = T.filter (/= ' ') v
