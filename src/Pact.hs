@@ -118,7 +118,7 @@ verifyQuery expected actual = toQ expected == toQ actual
   where toQ s = L.sortOn fst $ H.parseSimpleQuery (CS.pack s)
 
 verifyHeaders :: Object -> Object -> Diff
-verifyHeaders expected actual = sanitize expected == sanitize (HM.intersection actual expected)
+verifyHeaders expected actual = sanitize expected == (HM.intersection (sanitize actual) (sanitize expected))
   where sanitize obj = HM.fromList $ map (\(k,v) -> (T.toLower k, fixValue v)) $ HM.toList obj
         fixValue (String v) = T.filter (/= ' ') v
 
