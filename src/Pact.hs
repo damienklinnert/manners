@@ -36,20 +36,21 @@ instance FromJSON RequestDesc where
 
 type Diff = Bool
 
+testBase = "resources/pact_specification_v1.1/testcases/request"
+tests =
+ [ "/method/different method.json"
+ , "/method/matches.json"
+ , "/method/method is different case.json"
+ , "/path/empty path found when forward slash expected.json"
+ , "/path/forward slash found when empty path expected.json"
+ , "/path/incorrect path.json"
+ , "/path/matches.json"
+ , "/path/missing trailing slash in path.json"
+ , "/path/unexpected trailing slash in path.json"
+ ]
+
 main :: IO ()
-main = do
-  checkCase "resources/pact_specification_v1.1/testcases/request/method/different method.json"
-  checkCase "resources/pact_specification_v1.1/testcases/request/method/matches.json"
-  checkCase "resources/pact_specification_v1.1/testcases/request/method/method is different case.json"
-
-  checkCase "resources/pact_specification_v1.1/testcases/request/path/empty path found when forward slash expected.json"
-  checkCase "resources/pact_specification_v1.1/testcases/request/path/forward slash found when empty path expected.json"
-  checkCase "resources/pact_specification_v1.1/testcases/request/path/incorrect path.json"
-  checkCase "resources/pact_specification_v1.1/testcases/request/path/matches.json"
-  checkCase "resources/pact_specification_v1.1/testcases/request/path/missing trailing slash in path.json"
-  checkCase "resources/pact_specification_v1.1/testcases/request/path/unexpected trailing slash in path.json"
-
-  return ()
+main = mapM_ (checkCase . (testBase ++)) tests
 
 verifyRequest :: RequestDesc -> RequestDesc -> Diff
 verifyRequest expected actual = foldl1 (&&) [
