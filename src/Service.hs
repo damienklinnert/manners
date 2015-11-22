@@ -20,17 +20,18 @@ type Port = Int
 runProviderService :: Port -> IO ()
 runProviderService p = do
   putStrLn $ "Listening on port " ++ (show p)
-  providerState <- M.newMVar $ Provider.initialFakeProvider
-  Warp.run p (providerService providerState)
+  fakeProviderState <- M.newMVar $ Provider.initialFakeProvider
+  Warp.run p (providerService fakeProviderState)
 
 providerService :: M.MVar Provider.FakeProvider -> W.Application
-providerService providerState request respond =
+providerService fakeProviderState request respond =
   case route of
 
     ("POST", ["interactions"], True) -> do
       body <- W.strictRequestBody request
       let (Just interaction) = Aeson.decode body :: Maybe Pact.Interaction
       putStrLn (show interaction)
+      M.modifyMVar_ fakeProviderState (\fakeProvider -> return $ Provider.addInteraction fakeProvider interaction )
       respond $ W.responseLBS H.status200 [("Content-Type", "text/plain")] "Add interaction"
 
     ("PUT", ["interactions"], True) -> do
@@ -38,18 +39,26 @@ providerService providerState request respond =
       let (Just interactionWrapper) = Aeson.decode body :: Maybe InteractionWrapper
       let interactions = wrapperInteractions interactionWrapper
       putStrLn (show interactions)
+      M.modifyMVar_ fakeProviderState (\fakeProvider -> return $ Provider.setInteractions fakeProvider interactions )
       respond $ W.responseLBS H.status200 [("Content-Type", "text/plain")] "Sets all interactions"
 
-    ("DELETE", ["interactions"], True) -> respond $
-      W.responseLBS H.status200 [("Content-Type", "text/plain")] "Delete registered interactions"
+    ("DELETE", ["interactions"], True) -> do
+      M.modifyMVar_ fakeProviderState (\fakeProvider -> return $ Provider.resetInteractions fakeProvider )
+      respond $ W.responseLBS H.status200 [("Content-Type", "text/plain")] "Delete registered interactions"
 
-    ("GET", ["interactions", "verification"], True) -> respond $
-      W.responseLBS H.status200 [("Content-Type", "text/plain")] "Verify set-up interactions"
+    ("GET", ["interactions", "verification"], True) -> do
+      fakeProvider <- M.readMVar fakeProviderState
+      putStrLn (show $ Provider.verifyInteractions fakeProvider)
+      putStrLn (show fakeProvider)
+      respond $ W.responseLBS H.status200 [("Content-Type", "text/plain")] "Verify set-up interactions"
 
     ("POST", ["pact"], True) -> do
       body <- W.strictRequestBody request
       let (Just contactDesc) = Aeson.decode body :: Maybe ContractDescription
       putStrLn (show contactDesc)
+      fakeProvider <- M.readMVar fakeProviderState
+      let verifiedInteractions = Provider.verifyInteractions fakeProvider
+      putStrLn (show verifiedInteractions)
       respond $ W.responseLBS H.status200 [("Content-Type", "text/plain")] "Persist verified interactions as contract"
 
     _ -> do
