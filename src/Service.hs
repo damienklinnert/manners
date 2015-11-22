@@ -82,10 +82,14 @@ providerService fakeProviderState request respond =
       putStrLn (show inputRequest)
 
       fakeProvider <- M.readMVar fakeProviderState
+      let maybeInteraction = Provider.findInteractionForRequest fakeProvider inputRequest
+      let fakeProvider' = case maybeInteraction of (Just interaction) -> Provider.addInteractionMatch fakeProvider interaction
+                                                   Nothing            -> Provider.addMismatchedRequest fakeProvider inputRequest
+      M.modifyMVar_ fakeProviderState (\_ -> return fakeProvider')
 
-      -- @TODO Find matching interaction
+      -- @TODO now send response based on maybeInteraction
 
-      respond $ W.responseLBS H.status200 [("Content-Type", "text/plain")] "Default Handler"
+      respond $ W.responseLBS responseCode [("Content-Type", "text/plain")] "Default Handler"
 
   where route = (W.requestMethod request, W.pathInfo request, isAdminRequest)
         isAdminRequest =
