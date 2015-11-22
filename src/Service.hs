@@ -20,10 +20,11 @@ type Port = Int
 runProviderService :: Port -> IO ()
 runProviderService p = do
   putStrLn $ "Listening on port " ++ (show p)
-  Warp.run p providerService
+  providerState <- M.newMVar $ Provider.initialFakeProvider
+  Warp.run p (providerService providerState)
 
-providerService :: W.Application
-providerService request respond =
+providerService :: M.MVar Provider.FakeProvider -> W.Application
+providerService providerState request respond =
   case route of
 
     ("POST", ["interactions"], True) -> do
@@ -51,7 +52,8 @@ providerService request respond =
       putStrLn (show contactDesc)
       respond $ W.responseLBS H.status200 [("Content-Type", "text/plain")] "Persist verified interactions as contract"
 
-    _ -> respond $ W.responseLBS H.status200 [("Content-Type", "text/plain")] "Default Handler"
+    _ -> do
+      respond $ W.responseLBS H.status200 [("Content-Type", "text/plain")] "Default Handler"
 
   where route = (W.requestMethod request, W.pathInfo request, isAdminRequest)
         isAdminRequest =

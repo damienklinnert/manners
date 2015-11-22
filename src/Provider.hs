@@ -1,5 +1,6 @@
 module Provider
  ( FakeProvider()
+ , initialFakeProvider
  , activeInteractions
  , verifiedInteractions
  , addInteraction
