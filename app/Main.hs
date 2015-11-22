@@ -6,6 +6,8 @@ import qualified System.Console.GetOpt as Opt
 
 import Data.List (find)
 
+import qualified Service as Manners
+
 data CliOption = Help | Version deriving (Eq)
 
 options :: [Opt.OptDescr CliOption]
@@ -56,4 +58,4 @@ version :: IO ()
 version = putStrLn "manners version 0.1.0.0"
 
 fakeProvider :: IO ()
-fakeProvider = putStrLn "success"
+fakeProvider = Manners.runProviderService 1234
