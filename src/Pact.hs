@@ -32,7 +32,7 @@ data Response = Response
  { responseStatus :: Maybe Int
  , responseHeaders :: Maybe Object
  , responseBody :: Maybe Object
- }
+ } deriving (Show)
 
 instance FromJSON Response where
   parseJSON (Object v) = Response <$> v .:? "status" <*> v .:? "headers" <*> v .:?"body"
@@ -42,7 +42,7 @@ data Interaction = Interaction
  , interactionState :: Maybe String
  , interactionRequest :: Request
  , interactionResponse :: Response
- }
+ } deriving (Show)
 
 instance FromJSON Interaction where
   parseJSON (Object v) = Interaction <$> v .: "description" <*> v .:? "provider_state" <*> v .: "request" <*> v .: "response"
