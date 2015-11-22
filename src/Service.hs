@@ -5,12 +5,15 @@ module Service
  ) where
 
 import qualified Data.List as L
+import qualified Data.ByteString.Lazy as BL
 import qualified Data.HashMap.Strict as HM
 import qualified Control.Concurrent.MVar as M
 import Data.Aeson as Aeson
+import Data.Aeson.Encode.Pretty (encodePretty)
 import qualified Network.Wai as W
 import qualified Network.HTTP.Types as H
 import qualified Network.Wai.Handler.Warp as Warp
+import qualified System.Directory as D
 
 import qualified Pact as Pact
 import qualified Provider as Provider
@@ -54,11 +57,16 @@ providerService fakeProviderState request respond =
 
     ("POST", ["pact"], True) -> do
       body <- W.strictRequestBody request
-      let (Just contactDesc) = Aeson.decode body :: Maybe ContractDescription
-      putStrLn (show contactDesc)
+      let (Just contractDesc) = Aeson.decode body :: Maybe ContractDescription
+      putStrLn (show contractDesc)
       fakeProvider <- M.readMVar fakeProviderState
-      let verifiedInteractions = Provider.verifyInteractions fakeProvider
-      putStrLn (show verifiedInteractions)
+      let verifiedInteractions = Provider.verifiedInteractions fakeProvider
+      let contract = contractDesc { contractInteractions = verifiedInteractions }
+      putStrLn (show contract)
+      let marshalledContract = encodePretty contract
+      let fileName = "pact/" ++ (serviceName . contractConsumer $ contract) ++ "-" ++ (serviceName . contractProvider $ contract) ++ ".json"
+      D.createDirectoryIfMissing True "pact"
+      BL.writeFile fileName marshalledContract
       respond $ W.responseLBS H.status200 [("Content-Type", "text/plain")] "Persist verified interactions as contract"
 
     _ -> do
@@ -79,10 +87,19 @@ instance Aeson.FromJSON InteractionWrapper where
 data ServiceDescription = ServiceDescription { serviceName :: String } deriving (Show)
 instance Aeson.FromJSON ServiceDescription where
   parseJSON (Object v) = ServiceDescription <$> v .: "name"
+instance Aeson.ToJSON ServiceDescription where
+  toJSON (ServiceDescription name) = object ["name" .= name]
 
 data ContractDescription = ContractDescription
  { contractConsumer :: ServiceDescription
  , contractProvider :: ServiceDescription
+ , contractInteractions :: [Pact.Interaction]
  } deriving (Show)
 instance Aeson.FromJSON ContractDescription where
-  parseJSON (Object v) = ContractDescription <$> v .: "consumer" <*> v .: "provider"
+  parseJSON (Object v) = ContractDescription <$> v .: "consumer" <*> v .: "provider" <*> v .:? "interactions" .!= []
+instance Aeson.ToJSON ContractDescription where
+  toJSON (ContractDescription consumer provider interactions) = object
+   [ "consumer" .= consumer
+   , "provider" .= provider
+   , "interactions" .= interactions
+   ]

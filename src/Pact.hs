@@ -28,6 +28,15 @@ data Request = Request
 instance FromJSON Request where
   parseJSON (Object v) = Request <$> v .: "method" <*> v .: "path" <*> v .: "query" <*> v .: "headers" <*> v .:? "body"
 
+instance ToJSON Request where
+  toJSON (Request method path query headers body) = object
+   [ "method" .= method
+   , "path" .= path
+   , "query" .= query
+   , "headers" .= headers
+   , "body" .= body
+   ]
+
 data Response = Response
  { responseStatus :: Maybe Int
  , responseHeaders :: Maybe Object
@@ -36,6 +45,13 @@ data Response = Response
 
 instance FromJSON Response where
   parseJSON (Object v) = Response <$> v .:? "status" <*> v .:? "headers" <*> v .:?"body"
+
+instance ToJSON Response where
+  toJSON (Response status headers body) = object
+   [ "status" .= status
+   , "headers" .= headers
+   , "body" .= body
+   ]
 
 data Interaction = Interaction
  { interactionDescription :: String
@@ -46,6 +62,14 @@ data Interaction = Interaction
 
 instance FromJSON Interaction where
   parseJSON (Object v) = Interaction <$> v .: "description" <*> v .:? "provider_state" <*> v .: "request" <*> v .: "response"
+
+instance ToJSON Interaction where
+  toJSON (Interaction desc state req res) = object
+   [ "description" .= desc
+   , "provider_state" .= state
+   , "request" .= req
+   , "response" .= res
+   ]
 
 type Diff = Bool
 
