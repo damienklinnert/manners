@@ -1,6 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Pact
  ( Request,
+   Response,
+   Interaction,
    Diff,
    diffRequests
  ) where
@@ -16,25 +18,44 @@ import qualified Data.HashMap.Strict as HM
 import Data.Aeson
 
 data Request = Request
- { method :: String
- , path :: String
- , query :: String
- , headers :: Object
- , body :: Maybe Object
+ { requestMethod :: String
+ , requestPath :: String
+ , requestQuery :: String
+ , requestHeaders :: Object
+ , requestBody :: Maybe Object
  } deriving (Show, Eq)
 
 instance FromJSON Request where
   parseJSON (Object v) = Request <$> v .: "method" <*> v .: "path" <*> v .: "query" <*> v .: "headers" <*> v .:? "body"
 
+data Response = Response
+ { responseStatus :: Maybe Int
+ , responseHeaders :: Maybe Object
+ , responseBody :: Maybe Object
+ }
+
+instance FromJSON Response where
+  parseJSON (Object v) = Response <$> v .:? "status" <*> v .:? "headers" <*> v .:?"body"
+
+data Interaction = Interaction
+ { interactionDescription :: String
+ , interactionState :: Maybe String
+ , interactionRequest :: Request
+ , interactionResponse :: Response
+ }
+
+instance FromJSON Interaction where
+  parseJSON (Object v) = Interaction <$> v .: "description" <*> v .:? "provider_state" <*> v .: "request" <*> v .: "response"
+
 type Diff = Bool
 
 diffRequests :: Request -> Request -> Diff
 diffRequests expected actual = foldl1 (&&)
- [ verifyMethod (method expected) (method actual)
- , verifyPath (path expected) (path actual)
- , verifyQuery (query expected) (query actual)
- , verifyHeaders (headers expected) (headers actual)
- , verifyBody (body expected) (body actual)
+ [ verifyMethod (requestMethod expected) (requestMethod actual)
+ , verifyPath (requestPath expected) (requestPath actual)
+ , verifyQuery (requestQuery expected) (requestQuery actual)
+ , verifyHeaders (requestHeaders expected) (requestHeaders actual)
+ , verifyBody (requestBody expected) (requestBody actual)
  ]
 
 verifyMethod :: String -> String -> Diff
