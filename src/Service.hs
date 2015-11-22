@@ -5,6 +5,7 @@ module Service
  ) where
 
 import qualified Data.List as L
+import qualified Data.ByteString.Char8 as C
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.HashMap.Strict as HM
 import qualified Control.Concurrent.MVar as M
@@ -70,6 +71,20 @@ providerService fakeProviderState request respond =
       respond $ W.responseLBS H.status200 [("Content-Type", "text/plain")] "Persist verified interactions as contract"
 
     _ -> do
+      body <- W.strictRequestBody request
+      let inMethod = C.unpack $ W.requestMethod request
+      let inPath = filter (/='?') $ C.unpack $ W.rawPathInfo request
+      let inQuery = filter (/='?') $ C.unpack $ W.rawQueryString request
+      let inHeaders = HM.empty -- @TODO populate headers (HM.fromList $ W.requestHeaders request)
+      let inBody = decode body
+      let inputRequest = Pact.Request inMethod inPath inQuery inHeaders inBody
+
+      putStrLn (show inputRequest)
+
+      fakeProvider <- M.readMVar fakeProviderState
+
+      -- @TODO Find matching interaction
+
       respond $ W.responseLBS H.status200 [("Content-Type", "text/plain")] "Default Handler"
 
   where route = (W.requestMethod request, W.pathInfo request, isAdminRequest)

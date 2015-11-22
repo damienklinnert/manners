@@ -1,8 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Pact
- ( Request,
-   Response,
-   Interaction,
+ ( Request(..),
+   Response(..),
+   Interaction(..),
    Diff,
    diffRequests
  ) where
