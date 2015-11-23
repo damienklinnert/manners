@@ -89,9 +89,19 @@ providerService fakeProviderState request respond =
                                                    Nothing            -> Provider.addMismatchedRequest fakeProvider inputRequest
       M.modifyMVar_ fakeProviderState (\_ -> return fakeProvider')
 
-      -- @TODO now send response based on maybeInteraction
-
-      respond $ W.responseLBS H.status200 [("Content-Type", "text/plain")] "Default Handler"
+      respond $ case maybeInteraction of
+        (Just interaction) -> let response          = Pact.interactionResponse interaction
+                                  status            = toEnum $ case Pact.responseStatus response of
+                                                        (Just statusCode) -> statusCode
+                                                        Nothing           -> 200
+                                  headers           = case Pact.responseHeaders response of
+                                                        (Just headers) -> convertHeadersFromJson headers
+                                                        Nothing        -> []
+                                  body              = case Pact.responseBody response of
+                                                        (Just body)    -> encode body
+                                                        Nothing        -> ""
+                              in W.responseLBS status headers body
+        Nothing -> W.responseLBS H.status500 [] ""
 
   where route = (W.requestMethod request, W.pathInfo request, isAdminRequest)
         isAdminRequest =
@@ -128,3 +138,7 @@ instance Aeson.ToJSON ContractDescription where
 convertHeadersToJson :: [H.Header] -> Object
 convertHeadersToJson headers = HM.fromList $ map toTextPair headers
   where toTextPair (k, v) = (E.decodeUtf8 $ CI.foldedCase k, String $ E.decodeUtf8 v)
+
+convertHeadersFromJson :: Object -> [H.Header]
+convertHeadersFromJson headers = map fromTextPair $ HM.toList headers
+  where fromTextPair (k, (String v)) = (CI.mk $ E.encodeUtf8 k, E.encodeUtf8 v)
