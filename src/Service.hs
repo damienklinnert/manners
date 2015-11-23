@@ -8,6 +8,7 @@ import qualified Data.List as L
 import qualified Data.ByteString.Char8 as C
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.HashMap.Strict as HM
+import qualified Data.Text.Encoding as E
 import qualified Control.Concurrent.MVar as M
 import Data.Aeson as Aeson
 import Data.Aeson.Encode.Pretty (encodePretty)
@@ -15,6 +16,7 @@ import qualified Network.Wai as W
 import qualified Network.HTTP.Types as H
 import qualified Network.Wai.Handler.Warp as Warp
 import qualified System.Directory as D
+import qualified Data.CaseInsensitive as CI
 
 import qualified Pact as Pact
 import qualified Provider as Provider
@@ -75,7 +77,7 @@ providerService fakeProviderState request respond =
       let inMethod = C.unpack $ W.requestMethod request
       let inPath = filter (/='?') $ C.unpack $ W.rawPathInfo request
       let inQuery = filter (/='?') $ C.unpack $ W.rawQueryString request
-      let inHeaders = HM.empty -- @TODO populate headers (HM.fromList $ W.requestHeaders request)
+      let inHeaders = convertHeadersToJson $ W.requestHeaders request
       let inBody = decode body
       let inputRequest = Pact.Request inMethod inPath inQuery inHeaders inBody
 
@@ -89,7 +91,7 @@ providerService fakeProviderState request respond =
 
       -- @TODO now send response based on maybeInteraction
 
-      respond $ W.responseLBS responseCode [("Content-Type", "text/plain")] "Default Handler"
+      respond $ W.responseLBS H.status200 [("Content-Type", "text/plain")] "Default Handler"
 
   where route = (W.requestMethod request, W.pathInfo request, isAdminRequest)
         isAdminRequest =
@@ -122,3 +124,7 @@ instance Aeson.ToJSON ContractDescription where
    , "provider" .= provider
    , "interactions" .= interactions
    ]
+
+convertHeadersToJson :: [H.Header] -> Object
+convertHeadersToJson headers = HM.fromList $ map toTextPair headers
+  where toTextPair (k, v) = (E.decodeUtf8 $ CI.foldedCase k, String $ E.decodeUtf8 v)

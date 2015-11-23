@@ -28,6 +28,7 @@ library
                      , wai
                      , text
                      , directory
+                     , case-insensitive
   default-language:    Haskell2010
 
 executable manners-exe
