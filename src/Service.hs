@@ -34,6 +34,7 @@ providerService fakeProviderState request respond =
   case route of
 
     ("POST", ["interactions"], True) -> do
+      putStrLn "Setup interaction"
       body <- W.strictRequestBody request
       let (Just interaction) = Aeson.decode body :: Maybe Pact.Interaction
       putStrLn (show interaction)
@@ -41,6 +42,7 @@ providerService fakeProviderState request respond =
       respond $ W.responseLBS H.status200 [("Content-Type", "text/plain")] "Add interaction"
 
     ("PUT", ["interactions"], True) -> do
+      putStrLn "Set interactions"
       body <- W.strictRequestBody request
       let (Just interactionWrapper) = Aeson.decode body :: Maybe InteractionWrapper
       let interactions = wrapperInteractions interactionWrapper
@@ -49,16 +51,19 @@ providerService fakeProviderState request respond =
       respond $ W.responseLBS H.status200 [("Content-Type", "text/plain")] "Sets all interactions"
 
     ("DELETE", ["interactions"], True) -> do
+      putStrLn "Reset interactions"
       M.modifyMVar_ fakeProviderState (\fakeProvider -> return $ Provider.resetInteractions fakeProvider )
       respond $ W.responseLBS H.status200 [("Content-Type", "text/plain")] "Delete registered interactions"
 
     ("GET", ["interactions", "verification"], True) -> do
+      putStrLn "Verify interactions"
       fakeProvider <- M.readMVar fakeProviderState
       putStrLn (show $ Provider.verifyInteractions fakeProvider)
       putStrLn (show fakeProvider)
       respond $ W.responseLBS H.status200 [("Content-Type", "text/plain")] "Verify set-up interactions"
 
     ("POST", ["pact"], True) -> do
+      putStrLn "Write pact"
       body <- W.strictRequestBody request
       let (Just contractDesc) = Aeson.decode body :: Maybe ContractDescription
       putStrLn (show contractDesc)
@@ -73,6 +78,7 @@ providerService fakeProviderState request respond =
       respond $ W.responseLBS H.status200 [("Content-Type", "text/plain")] "Persist verified interactions as contract"
 
     _ -> do
+      putStrLn "Default handler"
       body <- W.strictRequestBody request
       let inMethod = C.unpack $ W.requestMethod request
       let inPath = filter (/='?') $ C.unpack $ W.rawPathInfo request
@@ -108,7 +114,7 @@ providerService fakeProviderState request respond =
           case L.find hasAdminHeader (W.requestHeaders request)
             of (Just _) -> True
                _ -> False
-        hasAdminHeader (h, v) = h == "X-Pact-Mock-Service" && v == "True"
+        hasAdminHeader (h, v) = CI.mk h == CI.mk "X-Pact-Mock-Service" && CI.mk v == CI.mk "True"
 
 
 data InteractionWrapper = InteractionWrapper { wrapperInteractions :: [Pact.Interaction] } deriving (Show)
