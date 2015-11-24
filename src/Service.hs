@@ -39,6 +39,7 @@ providerService fakeProviderState request respond =
       let (Just interaction) = Aeson.decode body :: Maybe Pact.Interaction
       putStrLn (show interaction)
       M.modifyMVar_ fakeProviderState (\fakeProvider -> return $ Provider.addInteraction fakeProvider interaction )
+      M.readMVar fakeProviderState >>= (putStrLn . show)
       respond $ W.responseLBS H.status200 [("Content-Type", "text/plain")] "Add interaction"
 
     ("PUT", ["interactions"], True) -> do
@@ -48,11 +49,13 @@ providerService fakeProviderState request respond =
       let interactions = wrapperInteractions interactionWrapper
       putStrLn (show interactions)
       M.modifyMVar_ fakeProviderState (\fakeProvider -> return $ Provider.setInteractions fakeProvider interactions )
+      M.readMVar fakeProviderState >>= (putStrLn . show)
       respond $ W.responseLBS H.status200 [("Content-Type", "text/plain")] "Sets all interactions"
 
     ("DELETE", ["interactions"], True) -> do
       putStrLn "Reset interactions"
       M.modifyMVar_ fakeProviderState (\fakeProvider -> return $ Provider.resetInteractions fakeProvider )
+      M.readMVar fakeProviderState >>= (putStrLn . show)
       respond $ W.responseLBS H.status200 [("Content-Type", "text/plain")] "Delete registered interactions"
 
     ("GET", ["interactions", "verification"], True) -> do
@@ -61,6 +64,7 @@ providerService fakeProviderState request respond =
       let isSuccessful = Provider.verifyInteractions fakeProvider
       putStrLn (show $ isSuccessful)
       let responseCode = if isSuccessful then H.status200 else H.status500
+      M.readMVar fakeProviderState >>= (putStrLn . show)
       respond $ W.responseLBS responseCode [("Content-Type", "text/plain")] "Verify set-up interactions"
 
     ("POST", ["pact"], True) -> do
