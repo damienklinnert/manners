@@ -4,6 +4,8 @@ import System.Exit (exitSuccess, exitFailure)
 import System.Environment (getArgs)
 import qualified System.Console.GetOpt as Opt
 
+import Control.Monad (when)
+
 import Data.List (find)
 
 import qualified Service as Manners
@@ -26,15 +28,12 @@ getCommand (x:_)
 
 main :: IO ()
 main = do
-  args <- getArgs
-  let (opts, rest, errors) = Opt.getOpt Opt.Permute options args
+  (opts, rest, errors) <- Opt.getOpt Opt.Permute options <$> getArgs
 
-  if errors == [] then return () else putStrLn (printOptionFail errors) >> exitFailure
+  when (errors /= []) $ putStrLn (printOptionFail errors) >> exitFailure
 
-  case (find (== Help) opts) of (Just _) -> usage >> exitSuccess
-                                _ -> return ()
-  case (find (== Version) opts) of (Just _) -> version >> exitSuccess
-                                   _ -> return ()
+  when (elem Help opts) $ usage >> exitSuccess
+  when (elem Version opts) $ version >> exitSuccess
 
   let command = getCommand rest
   case command of (Just Usage)        -> usage
