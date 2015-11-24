@@ -25,6 +25,7 @@ data FakeProvider = FakeProvider
 initialFakeProvider :: FakeProvider
 initialFakeProvider = FakeProvider [] [] [] []
 
+
 addInteraction :: FakeProvider -> P.Interaction -> FakeProvider
 addInteraction p i = p { activeInteractions = (i : activeInteractions p) }
 
@@ -32,7 +33,7 @@ setInteractions :: FakeProvider -> [P.Interaction] -> FakeProvider
 setInteractions p is = p { activeInteractions = is }
 
 resetInteractions :: FakeProvider -> FakeProvider
-resetInteractions p = p { activeInteractions = [], mismatchedRequests = [] }
+resetInteractions p = p { activeInteractions = [], mismatchedRequests = [], matchedInteractions = [] }
 
 findInteractionForRequest :: FakeProvider -> P.Request -> Maybe P.Interaction
 findInteractionForRequest p req = L.find (\i -> P.diffRequests (P.interactionRequest i) req) $ activeInteractions p
