@@ -58,9 +58,10 @@ providerService fakeProviderState request respond =
     ("GET", ["interactions", "verification"], True) -> do
       putStrLn "Verify interactions"
       fakeProvider <- M.readMVar fakeProviderState
-      putStrLn (show $ Provider.verifyInteractions fakeProvider)
-      putStrLn (show fakeProvider)
-      respond $ W.responseLBS H.status200 [("Content-Type", "text/plain")] "Verify set-up interactions"
+      let isSuccessful = Provider.verifyInteractions fakeProvider
+      putStrLn (show $ isSuccessful)
+      let responseCode = if isSuccessful then H.status200 else H.status500
+      respond $ W.responseLBS responseCode [("Content-Type", "text/plain")] "Verify set-up interactions"
 
     ("POST", ["pact"], True) -> do
       putStrLn "Write pact"
