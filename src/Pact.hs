@@ -27,6 +27,7 @@ import qualified Data.Aeson.Types as AT
 import Control.Monad (liftM)
 import qualified Network.HTTP.Types.Header as HTH
 import qualified Data.CaseInsensitive as CI
+import Data.Monoid (All(..))
 
 hasNullValue :: AT.Pair -> Bool
 hasNullValue (_, Null) = True
@@ -140,7 +141,7 @@ instance ToJSON ContractDescription where
 type Diff = Bool
 
 diffRequests :: Request -> Request -> Diff
-diffRequests expected actual = foldl1 (&&)
+diffRequests expected actual = getAll $ foldMap All
  [ verifyMethod (requestMethod expected) (requestMethod actual)
  , verifyPath (requestPath expected) (requestPath actual)
  , verifyQuery (requestQuery expected) (requestQuery actual)
