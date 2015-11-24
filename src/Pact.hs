@@ -13,9 +13,13 @@ import qualified Data.List as L
 import qualified Data.ByteString.Char8 as CS
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
+import qualified Data.Text.Encoding as E
 import qualified Network.HTTP.Types as H
 import qualified Data.HashMap.Strict as HM
+import qualified Data.Vector as V
 import Data.Aeson
+import Control.Monad (liftM)
+
 
 data Request = Request
  { requestMethod :: String
@@ -26,7 +30,19 @@ data Request = Request
  } deriving (Show, Eq)
 
 instance FromJSON Request where
-  parseJSON (Object v) = Request <$> v .: "method" <*> v .: "path" <*> v .:? "query" .!= "" <*> v .:? "headers" .!= HM.empty <*> v .:? "body"
+  parseJSON (Object v) = Request <$> v .: "method" <*> v .: "path" <*> liftM normalizedQuery (v .:? "query") <*> v .:? "headers" .!= HM.empty <*> v .:? "body"
+    where
+      normalizedQuery :: Maybe Value -> String
+      normalizedQuery Nothing = ""
+      normalizedQuery (Just (String x)) = T.unpack x
+      normalizedQuery (Just (Object x)) = CS.unpack $ H.renderSimpleQuery False $ mapToSimpleQuery x
+      mapToSimpleQuery :: HM.HashMap T.Text Value -> [(BS.ByteString, BS.ByteString)]
+      mapToSimpleQuery m = concat $ map flattenQuery $ HM.toList m
+      flattenQuery :: (T.Text, Value) -> [(BS.ByteString, BS.ByteString)]
+      flattenQuery (k, (Array vs)) = map (byteStringPairs k) $ V.toList vs
+      flattenQuery (k, s@(String _)) = [byteStringPairs k s]
+      byteStringPairs :: T.Text -> Value -> (BS.ByteString, BS.ByteString)
+      byteStringPairs key (String val) = (E.encodeUtf8 key, E.encodeUtf8 val)
 
 instance ToJSON Request where
   toJSON (Request method path query headers body) = object

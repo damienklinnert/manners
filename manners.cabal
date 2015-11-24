@@ -29,6 +29,7 @@ library
                      , text
                      , directory
                      , case-insensitive
+                     , vector
   default-language:    Haskell2010
 
 executable manners-exe
