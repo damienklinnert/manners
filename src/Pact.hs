@@ -22,7 +22,7 @@ data Request = Request
  , requestPath :: String
  , requestQuery :: String
  , requestHeaders :: Object
- , requestBody :: Maybe Object
+ , requestBody :: Maybe Value
  } deriving (Show, Eq)
 
 instance FromJSON Request where
@@ -40,7 +40,7 @@ instance ToJSON Request where
 data Response = Response
  { responseStatus :: Maybe Int
  , responseHeaders :: Maybe Object
- , responseBody :: Maybe Object
+ , responseBody :: Maybe Value
  } deriving (Show)
 
 instance FromJSON Response where
@@ -98,10 +98,12 @@ verifyHeaders expected actual = sanitize expected == (HM.intersection (sanitize 
   where sanitize obj = HM.fromList $ map (\(k,v) -> (T.toLower k, fixValue v)) $ HM.toList obj
         fixValue (String v) = T.filter (/= ' ') v
 
-verifyBody :: Maybe Object -> Maybe Object -> Diff
+verifyBody :: Maybe Value -> Maybe Value -> Diff
 verifyBody Nothing _ = True
 verifyBody (Just expected) Nothing = False
-verifyBody (Just expected) (Just actual) = expected == (HM.intersection actual expected)
+verifyBody (Just expected) (Just actual) = expectedObj == (HM.intersection actualObj expectedObj)
+  where expectedObj = HM.fromList [("value" :: String, expected :: Value)]
+        actualObj = HM.fromList [("value" :: String, actual :: Value)]
 
 data TestCase = TestCase
  { match :: Bool
