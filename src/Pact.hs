@@ -26,7 +26,7 @@ data Request = Request
  } deriving (Show, Eq)
 
 instance FromJSON Request where
-  parseJSON (Object v) = Request <$> v .: "method" <*> v .: "path" <*> v .: "query" <*> v .: "headers" <*> v .:? "body"
+  parseJSON (Object v) = Request <$> v .: "method" <*> v .: "path" <*> v .:? "query" .!= "" <*> v .:? "headers" .!= HM.empty <*> v .:? "body"
 
 instance ToJSON Request where
   toJSON (Request method path query headers body) = object
