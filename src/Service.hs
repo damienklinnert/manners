@@ -4,6 +4,7 @@ module Service
  , Port
  ) where
 
+import System.IO (stdout, hFlush)
 import qualified Data.List as L
 import qualified Data.ByteString.Char8 as C
 import qualified Data.ByteString.Lazy as BL
@@ -25,7 +26,8 @@ type Port = Int
 
 runProviderService :: Port -> IO ()
 runProviderService p = do
-  putStrLn $ "Listening on port " ++ (show p)
+  putStrLn $ "manners: listening on port " ++ (show p)
+  hFlush stdout
   fakeProviderState <- M.newMVar $ Provider.initialFakeProvider
   Warp.run p (providerService fakeProviderState)
 
