@@ -99,8 +99,8 @@ providerService fakeProviderState request respond =
       body <- W.strictRequestBody request
       let inMethod = C.unpack $ W.requestMethod request
       let inPath = filter (/='?') $ C.unpack $ W.rawPathInfo request
-      let inQuery = filter (/='?') $ C.unpack $ W.rawQueryString request
-      let inHeaders = convertHeadersToJson $ W.requestHeaders request
+      let inQuery = Just $ filter (/='?') $ C.unpack $ W.rawQueryString request
+      let inHeaders = Just $ convertHeadersToJson $ W.requestHeaders request
       let inBody = decode body
       let inputRequest = Pact.Request inMethod inPath inQuery inHeaders inBody
 

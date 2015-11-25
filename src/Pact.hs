@@ -18,24 +18,28 @@ import qualified Network.HTTP.Types as H
 import qualified Data.HashMap.Strict as HM
 import qualified Data.Vector as V
 import Data.Aeson
+import qualified Data.Aeson.Types as AT
 import Control.Monad (liftM)
 
+hasNullValue :: AT.Pair -> Bool
+hasNullValue (_, Null) = True
+hasNullValue _ = False
 
 data Request = Request
  { requestMethod :: String
  , requestPath :: String
- , requestQuery :: String
- , requestHeaders :: Object
+ , requestQuery :: Maybe String
+ , requestHeaders :: Maybe Object
  , requestBody :: Maybe Value
  } deriving (Show, Eq)
 
 instance FromJSON Request where
-  parseJSON (Object v) = Request <$> v .: "method" <*> v .: "path" <*> liftM normalizedQuery (v .:? "query") <*> v .:? "headers" .!= HM.empty <*> v .:? "body"
+  parseJSON (Object v) = Request <$> v .: "method" <*> v .: "path" <*> liftM normalizedQuery (v .:? "query") <*> v .:? "headers" <*> v .:? "body"
     where
-      normalizedQuery :: Maybe Value -> String
-      normalizedQuery Nothing = ""
-      normalizedQuery (Just (String x)) = T.unpack x
-      normalizedQuery (Just (Object x)) = CS.unpack $ H.renderSimpleQuery False $ mapToSimpleQuery x
+      normalizedQuery :: Maybe Value -> Maybe String
+      normalizedQuery Nothing = Nothing
+      normalizedQuery (Just (String x)) = Just $ T.unpack x
+      normalizedQuery (Just (Object x)) = Just $ CS.unpack $ H.renderSimpleQuery False $ mapToSimpleQuery x
       mapToSimpleQuery :: HM.HashMap T.Text Value -> [(BS.ByteString, BS.ByteString)]
       mapToSimpleQuery m = concat $ map flattenQuery $ HM.toList m
       flattenQuery :: (T.Text, Value) -> [(BS.ByteString, BS.ByteString)]
@@ -45,7 +49,7 @@ instance FromJSON Request where
       byteStringPairs key (String val) = (E.encodeUtf8 key, E.encodeUtf8 val)
 
 instance ToJSON Request where
-  toJSON (Request method path query headers body) = object
+  toJSON (Request method path query headers body) = object $ filter (not . hasNullValue)
    [ "method" .= method
    , "path" .= path
    , "query" .= query
@@ -63,7 +67,7 @@ instance FromJSON Response where
   parseJSON (Object v) = Response <$> v .:? "status" <*> v .:? "headers" <*> v .:?"body"
 
 instance ToJSON Response where
-  toJSON (Response status headers body) = object
+  toJSON (Response status headers body) = object $ filter (not . hasNullValue)
    [ "status" .= status
    , "headers" .= headers
    , "body" .= body
@@ -80,7 +84,7 @@ instance FromJSON Interaction where
   parseJSON (Object v) = Interaction <$> v .: "description" <*> v .:? "provider_state" <*> v .: "request" <*> v .: "response"
 
 instance ToJSON Interaction where
-  toJSON (Interaction desc state req res) = object
+  toJSON (Interaction desc state req res) = object $ filter (not . hasNullValue)
    [ "description" .= desc
    , "provider_state" .= state
    , "request" .= req
@@ -105,12 +109,16 @@ verifyMethod expected actual = uppercase expected == uppercase actual
 verifyPath :: String -> String -> Diff
 verifyPath = (==)
 
-verifyQuery :: String -> String -> Diff
-verifyQuery expected actual = toQ expected == toQ actual
+verifyQuery :: Maybe String -> Maybe String -> Diff
+verifyQuery Nothing _ = True
+verifyQuery (Just _) Nothing = False
+verifyQuery (Just expected) (Just actual) = toQ expected == toQ actual
   where toQ s = L.sortOn fst $ H.parseSimpleQuery (CS.pack s)
 
-verifyHeaders :: Object -> Object -> Diff
-verifyHeaders expected actual = sanitize expected == (HM.intersection (sanitize actual) (sanitize expected))
+verifyHeaders :: Maybe Object -> Maybe Object -> Diff
+verifyHeaders Nothing _ = True
+verifyHeaders (Just _) Nothing = False
+verifyHeaders (Just expected) (Just actual) = sanitize expected == (HM.intersection (sanitize actual) (sanitize expected))
   where sanitize obj = HM.fromList $ map (\(k,v) -> (T.toLower k, fixValue v)) $ HM.toList obj
         fixValue (String v) = T.filter (/= ' ') v
 
