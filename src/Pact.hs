@@ -18,8 +18,12 @@ import qualified Network.HTTP.Types as H
 import qualified Data.HashMap.Strict as HM
 import qualified Data.Vector as V
 import Data.Aeson
+import qualified Data.Aeson.Types as AT
 import Control.Monad (liftM)
 
+hasNullValue :: AT.Pair -> Bool
+hasNullValue (_, Null) = True
+hasNullValue _ = False
 
 data Request = Request
  { requestMethod :: String
@@ -45,7 +49,7 @@ instance FromJSON Request where
       byteStringPairs key (String val) = (E.encodeUtf8 key, E.encodeUtf8 val)
 
 instance ToJSON Request where
-  toJSON (Request method path query headers body) = object
+  toJSON (Request method path query headers body) = object $ filter (not . hasNullValue)
    [ "method" .= method
    , "path" .= path
    , "query" .= query
@@ -63,7 +67,7 @@ instance FromJSON Response where
   parseJSON (Object v) = Response <$> v .:? "status" <*> v .:? "headers" <*> v .:?"body"
 
 instance ToJSON Response where
-  toJSON (Response status headers body) = object
+  toJSON (Response status headers body) = object $ filter (not . hasNullValue)
    [ "status" .= status
    , "headers" .= headers
    , "body" .= body
@@ -80,7 +84,7 @@ instance FromJSON Interaction where
   parseJSON (Object v) = Interaction <$> v .: "description" <*> v .:? "provider_state" <*> v .: "request" <*> v .: "response"
 
 instance ToJSON Interaction where
-  toJSON (Interaction desc state req res) = object
+  toJSON (Interaction desc state req res) = object $ filter (not . hasNullValue)
    [ "description" .= desc
    , "provider_state" .= state
    , "request" .= req
