@@ -12,7 +12,7 @@ import qualified Data.HashMap.Strict as HM
 import qualified Data.Text.Encoding as E
 import qualified Control.Concurrent.MVar as M
 import Data.Aeson as Aeson
-import Data.Aeson.Encode.Pretty (encodePretty)
+import qualified Data.Aeson.Encode.Pretty as EP
 import qualified Network.Wai as W
 import qualified Network.HTTP.Types as H
 import qualified Network.Wai.Handler.Warp as Warp
@@ -23,6 +23,16 @@ import qualified Pact as Pact
 import qualified Provider as Provider
 
 type Port = Int
+
+encodePrettyCfg :: EP.Config
+encodePrettyCfg = EP.Config { EP.confIndent = 4, EP.confCompare = cmp }
+  where
+    cmp = EP.keyOrder
+     [ "consumer", "provider", "interactions"
+     , "description", "provider_state", "request", "response"
+     , "status"
+     , "method", "path", "query", "headers", "body"
+     ]
 
 runProviderService :: Port -> IO ()
 runProviderService p = do
@@ -78,7 +88,7 @@ providerService fakeProviderState request respond =
       let verifiedInteractions = Provider.verifiedInteractions fakeProvider
       let contract = contractDesc { contractInteractions = verifiedInteractions }
       putStrLn (show contract)
-      let marshalledContract = encodePretty contract
+      let marshalledContract = EP.encodePretty' encodePrettyCfg contract
       let fileName = "pact/" ++ (serviceName . contractConsumer $ contract) ++ "-" ++ (serviceName . contractProvider $ contract) ++ ".json"
       D.createDirectoryIfMissing True "pact"
       BL.writeFile fileName marshalledContract
