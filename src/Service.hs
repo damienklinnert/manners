@@ -96,12 +96,12 @@ providerService fakeProviderState request respond =
 
     _ -> do
       putStrLn "Default handler"
-      body <- W.strictRequestBody request
+      encodedBody <- W.strictRequestBody request
       let inMethod = C.unpack $ W.requestMethod request
       let inPath = filter (/='?') $ C.unpack $ W.rawPathInfo request
       let inQuery = Just $ filter (/='?') $ C.unpack $ W.rawQueryString request
       let inHeaders = Just $ convertHeadersToJson $ W.requestHeaders request
-      let inBody = decode body
+      let inBody = decode encodedBody
       let inputRequest = Pact.Request inMethod inPath inQuery inHeaders inBody
 
       putStrLn (show inputRequest)
@@ -114,16 +114,16 @@ providerService fakeProviderState request respond =
 
       respond $ case maybeInteraction of
         (Just interaction) -> let response          = Pact.interactionResponse interaction
-                                  status            = toEnum $ case Pact.responseStatus response of
+                                  resStatus         = toEnum $ case Pact.responseStatus response of
                                                         (Just statusCode) -> statusCode
                                                         Nothing           -> 200
-                                  headers           = case Pact.responseHeaders response of
+                                  resHeaders        = case Pact.responseHeaders response of
                                                         (Just headers) -> convertHeadersFromJson headers
                                                         Nothing        -> []
-                                  body              = case Pact.responseBody response of
+                                  resBody           = case Pact.responseBody response of
                                                         (Just body)    -> encode body
                                                         Nothing        -> ""
-                              in W.responseLBS status headers body
+                              in W.responseLBS resStatus resHeaders resBody
         Nothing -> W.responseLBS H.status500 [] ""
 
   where route = (W.requestMethod request, W.pathInfo request, isAdminRequest)
@@ -137,10 +137,12 @@ providerService fakeProviderState request respond =
 data InteractionWrapper = InteractionWrapper { wrapperInteractions :: [Pact.Interaction] } deriving (Show)
 instance Aeson.FromJSON InteractionWrapper where
   parseJSON (Object v) = InteractionWrapper <$> v .: "interactions"
+  parseJSON _ = error "can't parse InteractionWrapper"
 
 data ServiceDescription = ServiceDescription { serviceName :: String } deriving (Show)
 instance Aeson.FromJSON ServiceDescription where
   parseJSON (Object v) = ServiceDescription <$> v .: "name"
+  parseJSON _ = error "can't parse ServiceDescription"
 instance Aeson.ToJSON ServiceDescription where
   toJSON (ServiceDescription name) = object ["name" .= name]
 
@@ -151,6 +153,7 @@ data ContractDescription = ContractDescription
  } deriving (Show)
 instance Aeson.FromJSON ContractDescription where
   parseJSON (Object v) = ContractDescription <$> v .: "consumer" <*> v .: "provider" <*> v .:? "interactions" .!= []
+  parseJSON _ = error "cant't parse ContractDescription"
 instance Aeson.ToJSON ContractDescription where
   toJSON (ContractDescription consumer provider interactions) = object
    [ "consumer" .= consumer
@@ -164,4 +167,6 @@ convertHeadersToJson headers = HM.fromList $ map toTextPair headers
 
 convertHeadersFromJson :: Object -> [H.Header]
 convertHeadersFromJson headers = map fromTextPair $ HM.toList headers
-  where fromTextPair (k, (String v)) = (CI.mk $ E.encodeUtf8 k, E.encodeUtf8 v)
+  where
+    fromTextPair (k, (String v)) = (CI.mk $ E.encodeUtf8 k, E.encodeUtf8 v)
+    fromTextPair _ = error "Can't convert headers from json"

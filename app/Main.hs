@@ -6,8 +6,6 @@ import qualified System.Console.GetOpt as Opt
 
 import Control.Monad (when)
 
-import Data.List (find)
-
 import qualified Service as Manners
 
 data CliOption = Help | Version deriving (Eq)

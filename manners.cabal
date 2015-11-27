@@ -16,8 +16,9 @@ cabal-version:       >=1.10
 library
   hs-source-dirs:      src
   exposed-modules:     Service
-  other-modules:       Pact
-                     , Provider
+                     , Pact
+  other-modules:       Provider
+  ghc-options:         -Wall -Werror
   build-depends:       base >= 4.7 && < 5
                      , aeson
                      , aeson-pretty
@@ -35,7 +36,7 @@ library
 executable manners
   hs-source-dirs:      app
   main-is:             Main.hs
-  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N -Wall -Werror
   build-depends:       base
                      , manners
   default-language:    Haskell2010
@@ -43,10 +44,12 @@ executable manners
 test-suite manners-test
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
-  main-is:             Spec.hs
+  main-is:             PactSpec.hs
   build-depends:       base
                      , manners
-  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+                     , bytestring
+                     , aeson
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N -Wall -Werror
   default-language:    Haskell2010
 
 source-repository head
