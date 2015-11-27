@@ -1,0 +1,25 @@
+{
+  "name": "manners",
+  "version": "0.1.0",
+  "description": "Get your services behaved",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "manners"
+  ],
+  "author": "Damien Klinnert",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mannersio/manners.git"
+  },
+  "bugs": {
+    "url": "https://github.com/mannersio/manners/issues"
+  },
+  "homepage": "https://github.com/mannersio/manners#readme",
+  "dependencies": {
+    "manners-bin": "^0.1.0"
+  }
+}
