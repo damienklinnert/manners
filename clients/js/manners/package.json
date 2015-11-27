@@ -1,6 +1,6 @@
 {
   "name": "manners",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Get your services behaved",
   "main": "index.js",
   "scripts": {
