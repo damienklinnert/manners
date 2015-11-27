@@ -8,7 +8,7 @@ var FakeProvider = module.exports.FakeProvider = function () {
 };
 
 FakeProvider.prototype.start = function (done) {
-  this._process = spawn(mannersBin, ['fake-provider'], { cwd: __dirname });
+  this._process = spawn(mannersBin, ['fake-provider']);
   this._process.stdout.on('data', function (d) {
     if (d.toString().indexOf('listen') !== -1) {
       done();
