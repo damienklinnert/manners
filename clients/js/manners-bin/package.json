@@ -1,0 +1,29 @@
+{
+  "name": "manners-bin",
+  "version": "0.1.0",
+  "description": "Binary wrapper for manners",
+  "main": "index.js",
+  "bin": {
+    "manners": "bin/cli.js"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "postinstall": "node support/install.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mannersio/manners.git"
+  },
+  "keywords": [
+    "manners"
+  ],
+  "author": "Damien Klinnert",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/mannersio/manners/issues"
+  },
+  "homepage": "https://github.com/mannersio/manners#readme",
+  "dependencies": {
+    "bin-wrapper": "^3.0.2"
+  }
+}
