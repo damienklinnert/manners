@@ -1,4 +1,4 @@
-# manners
+# manners [![Build Status](https://travis-ci.org/mannersio/manners.svg?branch=master)](https://travis-ci.org/mannersio/manners)
 
 Get your services behaved.
 
