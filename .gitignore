@@ -2,3 +2,4 @@
 .stack-work/
 *.iml
 .DS_Store
+pact/
