@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+module PactSpec where
 
 import qualified Data.ByteString.Lazy as BL
 import System.Exit (exitFailure)
