@@ -44,7 +44,7 @@ instance FromJSON Request where
       normalizedQuery (Just (Object x)) = Just $ CS.unpack $ H.renderSimpleQuery False $ mapToSimpleQuery x
       normalizedQuery _ = error "Could not normalize query for request"
       mapToSimpleQuery :: HM.HashMap T.Text Value -> [(BS.ByteString, BS.ByteString)]
-      mapToSimpleQuery m = concat $ map flattenQuery $ HM.toList m
+      mapToSimpleQuery m = L.sortBy (\(f, _) (g, _)-> f `compare` g) $ concat $ map flattenQuery $ HM.toList m
       flattenQuery :: (T.Text, Value) -> [(BS.ByteString, BS.ByteString)]
       flattenQuery (k, (Array vs)) = map (byteStringPairs k) $ V.toList vs
       flattenQuery (k, s@(String _)) = [byteStringPairs k s]
