@@ -16,6 +16,7 @@ cabal-version:       >=1.10
 library
   hs-source-dirs:      src
   exposed-modules:     Service
+                     , Runner
                      , Pact
   other-modules:       Provider
   ghc-options:         -Wall -Werror
@@ -31,6 +32,8 @@ library
                      , directory
                      , case-insensitive
                      , vector
+                     , wreq
+                     , lens
   default-language:    Haskell2010
 
 executable manners
