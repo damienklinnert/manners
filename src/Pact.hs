@@ -1,10 +1,13 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Pact
- ( Request(..),
-   Response(..),
-   Interaction(..),
-   Diff,
-   diffRequests
+ ( Request(..)
+ , Response(..)
+ , Interaction(..)
+ , InteractionWrapper(..)
+ , ServiceDescription(..)
+ , ContractDescription(..)
+ , Diff
+ , diffRequests
  ) where
 
 import Data.Char (toUpper)
@@ -41,7 +44,7 @@ instance FromJSON Request where
       normalizedQuery (Just (Object x)) = Just $ CS.unpack $ H.renderSimpleQuery False $ mapToSimpleQuery x
       normalizedQuery _ = error "Could not normalize query for request"
       mapToSimpleQuery :: HM.HashMap T.Text Value -> [(BS.ByteString, BS.ByteString)]
-      mapToSimpleQuery m = concat $ map flattenQuery $ HM.toList m
+      mapToSimpleQuery m = L.sortBy (\(f, _) (g, _)-> f `compare` g) $ concat $ map flattenQuery $ HM.toList m
       flattenQuery :: (T.Text, Value) -> [(BS.ByteString, BS.ByteString)]
       flattenQuery (k, (Array vs)) = map (byteStringPairs k) $ V.toList vs
       flattenQuery (k, s@(String _)) = [byteStringPairs k s]
@@ -64,7 +67,7 @@ data Response = Response
  { responseStatus :: Maybe Int
  , responseHeaders :: Maybe Object
  , responseBody :: Maybe Value
- } deriving (Show)
+ } deriving (Show, Eq)
 
 instance FromJSON Response where
   parseJSON (Object v) = Response <$> v .:? "status" <*> v .:? "headers" <*> v .:?"body"
@@ -82,7 +85,7 @@ data Interaction = Interaction
  , interactionState :: Maybe String
  , interactionRequest :: Request
  , interactionResponse :: Response
- } deriving (Show)
+ } deriving (Show, Eq)
 
 instance FromJSON Interaction where
   parseJSON (Object v) = Interaction <$> v .: "description" <*> v .:? "provider_state" <*> v .: "request" <*> v .: "response"
@@ -94,6 +97,39 @@ instance ToJSON Interaction where
    , "provider_state" .= state
    , "request" .= req
    , "response" .= res
+   ]
+
+data InteractionWrapper = InteractionWrapper { wrapperInteractions :: [Pact.Interaction] } deriving (Show)
+instance FromJSON InteractionWrapper where
+  parseJSON (Object v) = InteractionWrapper <$> v .: "interactions"
+  parseJSON _ = error "can't parse InteractionWrapper"
+instance ToJSON InteractionWrapper where
+  toJSON (InteractionWrapper w) = object ["interactions" .= w]
+
+data ServiceDescription = ServiceDescription { serviceName :: String } deriving (Show, Eq)
+
+instance FromJSON ServiceDescription where
+  parseJSON (Object v) = ServiceDescription <$> v .: "name"
+  parseJSON _ = error "can't parse ServiceDescription"
+
+instance ToJSON ServiceDescription where
+  toJSON (ServiceDescription name) = object ["name" .= name]
+
+data ContractDescription = ContractDescription
+ { contractConsumer :: ServiceDescription
+ , contractProvider :: ServiceDescription
+ , contractInteractions :: [Pact.Interaction]
+ } deriving (Show, Eq)
+
+instance FromJSON ContractDescription where
+  parseJSON (Object v) = ContractDescription <$> v .: "consumer" <*> v .: "provider" <*> v .:? "interactions" .!= []
+  parseJSON _ = error "cant't parse ContractDescription"
+
+instance ToJSON ContractDescription where
+  toJSON (ContractDescription consumer provider interactions) = object
+   [ "consumer" .= consumer
+   , "provider" .= provider
+   , "interactions" .= interactions
    ]
 
 type Diff = Bool
