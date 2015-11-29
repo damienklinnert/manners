@@ -85,7 +85,7 @@ providerService fakeProviderState request respond =
       let (Just contractDesc) = Aeson.decode body :: Maybe Pact.ContractDescription
       putStrLn (show contractDesc)
       fakeProvider <- M.readMVar fakeProviderState
-      let verifiedInteractions = Provider.verifiedInteractions fakeProvider
+      let verifiedInteractions = reverse $ Provider.verifiedInteractions fakeProvider
       let contract = contractDesc { Pact.contractInteractions = verifiedInteractions }
       putStrLn (show contract)
       let marshalledContract = EP.encodePretty' encodePrettyCfg contract
