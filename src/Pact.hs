@@ -8,6 +8,7 @@ module Pact
  , ContractDescription(..)
  , Diff
  , diffRequests
+ , diffResponses
  ) where
 
 import Data.Char (toUpper)
@@ -140,7 +141,14 @@ diffRequests expected actual = foldl1 (&&)
  , verifyPath (requestPath expected) (requestPath actual)
  , verifyQuery (requestQuery expected) (requestQuery actual)
  , verifyHeaders (requestHeaders expected) (requestHeaders actual)
- , verifyBody (requestBody expected) (requestBody actual)
+ , verifyBodyStrict (requestBody expected) (requestBody actual)
+ ]
+
+diffResponses :: Response -> Response -> Diff
+diffResponses expected actual = foldl1 (&&)
+ [ verifyStatus (responseStatus expected) (responseStatus actual)
+ , verifyHeaders (responseHeaders expected) (responseHeaders actual)
+ , verifyBody (responseBody expected) (responseBody actual)
  ]
 
 verifyMethod :: String -> String -> Diff
@@ -164,9 +172,27 @@ verifyHeaders (Just expected) (Just actual) = sanitize expected == (HM.intersect
         fixValue (String v) = T.filter (/= ' ') v
         fixValue _ = error "Unexpected value for verifyHeaders.sanitize"
 
+verifyBodyStrict :: Maybe Value -> Maybe Value -> Diff
+verifyBodyStrict Nothing _ = True
+verifyBodyStrict (Just _) Nothing = False
+verifyBodyStrict (Just expected) (Just actual) = expectedObj == actualObj
+  where expectedObj = HM.fromList [("value" :: String, expected :: Value)]
+        actualObj = HM.fromList [("value" :: String, actual :: Value)]
+
 verifyBody :: Maybe Value -> Maybe Value -> Diff
 verifyBody Nothing _ = True
 verifyBody (Just _) Nothing = False
-verifyBody (Just expected) (Just actual) = expectedObj == (HM.intersection actualObj expectedObj)
-  where expectedObj = HM.fromList [("value" :: String, expected :: Value)]
-        actualObj = HM.fromList [("value" :: String, actual :: Value)]
+verifyBody (Just expected) (Just actual) = expectedObj == intersect actualObj expectedObj
+  where expectedObj = Object $ HM.fromList [("value" :: T.Text, expected :: Value)]
+        actualObj = Object $ HM.fromList [("value" :: T.Text, actual :: Value)]
+        intersect :: Value -> Value -> Value
+        intersect (Object vals) (Object filts) =
+         Object
+           $ HM.mapWithKey (\k _ -> intersect ((HM.!) vals k) ((HM.!) filts k))
+           $ HM.intersection vals filts
+        intersect x _ = x
+
+verifyStatus :: Maybe Int -> Maybe Int -> Diff
+verifyStatus Nothing _ = True
+verifyStatus (Just _) Nothing = False
+verifyStatus(Just expected) (Just actual) = expected == actual
