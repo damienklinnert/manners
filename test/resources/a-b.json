@@ -1,0 +1,37 @@
+{
+    "consumer": {
+        "name": "a"
+    },
+    "provider": {
+        "name": "b"
+    },
+    "interactions": [
+        {
+            "description": "a sample interaction",
+            "provider_state": "stateless",
+            "request": {
+                "method": "get",
+                "path": "/sample"
+            },
+            "response": {
+                "status": 201
+            }
+        },
+        {
+            "description": "another interaction",
+            "provider_state": "some_state",
+            "request": {
+                "method": "GET",
+                "path": "/sample/call"
+            },
+            "response": {
+                "status": 400,
+                "headers": {
+                    "content-type": "application/json",
+                    "x-header": "here"
+                },
+                "body": "bodycontent"
+            }
+        }
+    ]
+}

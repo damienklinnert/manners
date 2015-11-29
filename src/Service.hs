@@ -57,8 +57,8 @@ providerService fakeProviderState request respond =
     ("PUT", ["interactions"], True) -> do
       putStrLn "Set interactions"
       body <- W.strictRequestBody request
-      let (Just interactionWrapper) = Aeson.decode body :: Maybe InteractionWrapper
-      let interactions = wrapperInteractions interactionWrapper
+      let (Just interactionWrapper) = Aeson.decode body :: Maybe Pact.InteractionWrapper
+      let interactions = Pact.wrapperInteractions interactionWrapper
       putStrLn (show interactions)
       M.modifyMVar_ fakeProviderState (\fakeProvider -> return $ Provider.setInteractions fakeProvider interactions )
       M.readMVar fakeProviderState >>= (putStrLn . show)
@@ -82,14 +82,14 @@ providerService fakeProviderState request respond =
     ("POST", ["pact"], True) -> do
       putStrLn "Write pact"
       body <- W.strictRequestBody request
-      let (Just contractDesc) = Aeson.decode body :: Maybe ContractDescription
+      let (Just contractDesc) = Aeson.decode body :: Maybe Pact.ContractDescription
       putStrLn (show contractDesc)
       fakeProvider <- M.readMVar fakeProviderState
       let verifiedInteractions = Provider.verifiedInteractions fakeProvider
-      let contract = contractDesc { contractInteractions = verifiedInteractions }
+      let contract = contractDesc { Pact.contractInteractions = verifiedInteractions }
       putStrLn (show contract)
       let marshalledContract = EP.encodePretty' encodePrettyCfg contract
-      let fileName = "pact/" ++ (serviceName . contractConsumer $ contract) ++ "-" ++ (serviceName . contractProvider $ contract) ++ ".json"
+      let fileName = "pact/" ++ (Pact.serviceName . Pact.contractConsumer $ contract) ++ "-" ++ (Pact.serviceName . Pact.contractProvider $ contract) ++ ".json"
       D.createDirectoryIfMissing True "pact"
       BL.writeFile fileName marshalledContract
       respond $ W.responseLBS H.status200 [("Content-Type", "text/plain")] "Persist verified interactions as contract"
@@ -132,34 +132,6 @@ providerService fakeProviderState request respond =
             of (Just _) -> True
                _ -> False
         hasAdminHeader (h, v) = CI.mk h == CI.mk "X-Pact-Mock-Service" && CI.mk v == CI.mk "True"
-
-
-data InteractionWrapper = InteractionWrapper { wrapperInteractions :: [Pact.Interaction] } deriving (Show)
-instance Aeson.FromJSON InteractionWrapper where
-  parseJSON (Object v) = InteractionWrapper <$> v .: "interactions"
-  parseJSON _ = error "can't parse InteractionWrapper"
-
-data ServiceDescription = ServiceDescription { serviceName :: String } deriving (Show)
-instance Aeson.FromJSON ServiceDescription where
-  parseJSON (Object v) = ServiceDescription <$> v .: "name"
-  parseJSON _ = error "can't parse ServiceDescription"
-instance Aeson.ToJSON ServiceDescription where
-  toJSON (ServiceDescription name) = object ["name" .= name]
-
-data ContractDescription = ContractDescription
- { contractConsumer :: ServiceDescription
- , contractProvider :: ServiceDescription
- , contractInteractions :: [Pact.Interaction]
- } deriving (Show)
-instance Aeson.FromJSON ContractDescription where
-  parseJSON (Object v) = ContractDescription <$> v .: "consumer" <*> v .: "provider" <*> v .:? "interactions" .!= []
-  parseJSON _ = error "cant't parse ContractDescription"
-instance Aeson.ToJSON ContractDescription where
-  toJSON (ContractDescription consumer provider interactions) = object
-   [ "consumer" .= consumer
-   , "provider" .= provider
-   , "interactions" .= interactions
-   ]
 
 convertHeadersToJson :: [H.Header] -> Object
 convertHeadersToJson headers = HM.fromList $ map toTextPair headers

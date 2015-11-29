@@ -1,0 +1,78 @@
+{
+    "consumer": {
+        "name": "Hello Consumer"
+    },
+    "provider": {
+        "name": "Hello Provider"
+    },
+    "interactions": [
+        {
+            "description": "a request for hello",
+            "request": {
+                "method": "get",
+                "path": "/sayHello"
+            },
+            "response": {
+                "status": 200,
+                "headers": {
+                    "Content-Type": "application/json"
+                },
+                "body": {
+                    "reply": "Hello"
+                }
+            }
+        },
+        {
+            "description": "a request friends",
+            "request": {
+                "method": "get",
+                "path": "/friends",
+                "query": "age=30&children=Mary%20Jane&children=James",
+                "headers": {
+                    "Accept": "application/json"
+                }
+            },
+            "response": {
+                "status": 200,
+                "headers": {
+                    "Content-Type": "application/json"
+                },
+                "body": {
+                    "friends": [
+                        {
+                            "name": "Sue"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "description": "a request to unfriend",
+            "provider_state": "I am friends with Fred",
+            "request": {
+                "method": "put",
+                "path": "/unfriendMe"
+            },
+            "response": {
+                "status": 200,
+                "headers": {
+                    "Content-Type": "application/json"
+                },
+                "body": {
+                    "reply": "Bye"
+                }
+            }
+        },
+        {
+            "description": "a request to unfriend",
+            "provider_state": "I have no friends",
+            "request": {
+                "method": "put",
+                "path": "/unfriendMe"
+            },
+            "response": {
+                "status": 404
+            }
+        }
+    ]
+}
