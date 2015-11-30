@@ -22,3 +22,13 @@ FakeProvider.prototype.stop = function (done) {
   });
   this._process.kill();
 };
+
+var FakeConsumer = module.exports.FakeConsumer = function (contractPath, providerUrl) {
+  this._contractPath = contractPath;
+  this._providerUrl = providerUrl;
+};
+
+FakeConsumer.prototype.run = function (done) {
+  var process = spawn(mannersBin, ['fake-consumer', this._contractPath, this._providerUrl], { stdio: 'inherit' });
+  process.on('exit', done);
+};

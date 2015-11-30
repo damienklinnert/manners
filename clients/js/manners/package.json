@@ -20,6 +20,6 @@
   },
   "homepage": "https://github.com/mannersio/manners#readme",
   "dependencies": {
-    "manners-bin": "^0.1.0"
+    "manners-bin": "^0.2.0"
   }
 }
