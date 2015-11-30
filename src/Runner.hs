@@ -24,33 +24,37 @@ runContract path baseUrl = do
   let (Just contract) = A.decode contents :: Maybe P.ContractDescription
   putStrLn $ "using contract at " ++ path
   putStrLn $ foldl1 (++)
-    [ "a contract between "
+    [ "a contract between '"
     , (P.serviceName . P.contractConsumer $ contract)
-    , " and "
+    , "' and '"
     , (P.serviceName . P.contractProvider $ contract)
+    , "'"
     ]
 
   let interactions = P.contractInteractions contract
   C.forM_ interactions $ \i -> do
     putStrLn $ foldl1 (++)
-      [ "verifying "
+      [ "verifying '"
       , (P.interactionDescription i)
-      , " with state "
+      , "' with state '"
       , M.fromMaybe "" (P.interactionState i)
+      , "'"
       ]
     let request = P.interactionRequest i
     let expectedResponse = P.interactionResponse i
-    putStrLn "with request"
-    print $ request
 
     actualResponse <- performRequest baseUrl request
-    putStrLn "expected response"
-    print expectedResponse
-    putStrLn "actual response"
-    print actualResponse
 
     let success = P.diffResponses expectedResponse actualResponse
-    C.when (not success) (putStrLn "failure" >> S.exitFailure)
+    C.when (not success) $ do
+      putStrLn "-- FAILURE"
+      putStrLn "with request"
+      print $ request
+      putStrLn "expected response"
+      print expectedResponse
+      putStrLn "actual response"
+      print actualResponse
+      S.exitFailure
 
 performRequest :: BaseUrl -> P.Request -> IO (P.Response)
 performRequest baseUrl req = performMethod method url opts body
