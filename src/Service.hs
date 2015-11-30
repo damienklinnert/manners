@@ -8,8 +8,6 @@ import System.IO (stdout, hFlush)
 import qualified Data.List as L
 import qualified Data.ByteString.Char8 as C
 import qualified Data.ByteString.Lazy as BL
-import qualified Data.HashMap.Strict as HM
-import qualified Data.Text.Encoding as E
 import qualified Control.Concurrent.MVar as M
 import Data.Aeson as Aeson
 import qualified Data.Aeson.Encode.Pretty as EP
@@ -100,7 +98,7 @@ providerService fakeProviderState request respond =
       let inMethod = C.unpack $ W.requestMethod request
       let inPath = filter (/='?') $ C.unpack $ W.rawPathInfo request
       let inQuery = Just $ filter (/='?') $ C.unpack $ W.rawQueryString request
-      let inHeaders = Just $ convertHeadersToJson $ W.requestHeaders request
+      let inHeaders = Just $ Pact.convertHeadersToJson $ W.requestHeaders request
       let inBody = decode encodedBody
       let inputRequest = Pact.Request inMethod inPath inQuery inHeaders inBody
 
@@ -118,7 +116,7 @@ providerService fakeProviderState request respond =
                                                         (Just statusCode) -> statusCode
                                                         Nothing           -> 200
                                   resHeaders        = case Pact.responseHeaders response of
-                                                        (Just headers) -> convertHeadersFromJson headers
+                                                        (Just headers) -> Pact.convertHeadersFromJson headers
                                                         Nothing        -> []
                                   resBody           = case Pact.responseBody response of
                                                         (Just body)    -> encode body
@@ -132,13 +130,3 @@ providerService fakeProviderState request respond =
             of (Just _) -> True
                _ -> False
         hasAdminHeader (h, v) = CI.mk h == CI.mk "X-Pact-Mock-Service" && CI.mk v == CI.mk "True"
-
-convertHeadersToJson :: [H.Header] -> Object
-convertHeadersToJson headers = HM.fromList $ map toTextPair headers
-  where toTextPair (k, v) = (E.decodeUtf8 $ CI.foldedCase k, String $ E.decodeUtf8 v)
-
-convertHeadersFromJson :: Object -> [H.Header]
-convertHeadersFromJson headers = map fromTextPair $ HM.toList headers
-  where
-    fromTextPair (k, (String v)) = (CI.mk $ E.encodeUtf8 k, E.encodeUtf8 v)
-    fromTextPair _ = error "Can't convert headers from json"

@@ -9,6 +9,8 @@ module Pact
  , Diff
  , diffRequests
  , diffResponses
+ , convertHeadersToJson
+ , convertHeadersFromJson
  ) where
 
 import Data.Char (toUpper)
@@ -23,6 +25,8 @@ import qualified Data.Vector as V
 import Data.Aeson
 import qualified Data.Aeson.Types as AT
 import Control.Monad (liftM)
+import qualified Network.HTTP.Types.Header as HTH
+import qualified Data.CaseInsensitive as CI
 
 hasNullValue :: AT.Pair -> Bool
 hasNullValue (_, Null) = True
@@ -196,3 +200,13 @@ verifyStatus :: Maybe Int -> Maybe Int -> Diff
 verifyStatus Nothing _ = True
 verifyStatus (Just _) Nothing = False
 verifyStatus(Just expected) (Just actual) = expected == actual
+
+convertHeadersToJson :: [HTH.Header] -> Object
+convertHeadersToJson headers = HM.fromList $ map toTextPair headers
+  where toTextPair (k, v) = (E.decodeUtf8 $ CI.foldedCase k, String $ E.decodeUtf8 v)
+
+convertHeadersFromJson :: Object -> [HTH.Header]
+convertHeadersFromJson headers = map fromTextPair $ HM.toList headers
+  where
+    fromTextPair (k, (String v)) = (CI.mk $ E.encodeUtf8 k, E.encodeUtf8 v)
+    fromTextPair _ = error "Can't convert headers from json"
