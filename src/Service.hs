@@ -98,7 +98,7 @@ providerService fakeProviderState request respond =
       let inMethod = C.unpack $ W.requestMethod request
       let inPath = filter (/='?') $ C.unpack $ W.rawPathInfo request
       let inQuery = Just $ filter (/='?') $ C.unpack $ W.rawQueryString request
-      let inHeaders = Just $ Pact.convertHeadersToJson $ W.requestHeaders request
+      let inHeaders = Pact.convertHeadersToJson $ W.requestHeaders request
       let inBody = decode encodedBody
       let inputRequest = Pact.Request inMethod inPath inQuery inHeaders inBody
 
@@ -115,9 +115,7 @@ providerService fakeProviderState request respond =
                                   resStatus         = toEnum $ case Pact.responseStatus response of
                                                         (Just statusCode) -> statusCode
                                                         Nothing           -> 200
-                                  resHeaders        = case Pact.responseHeaders response of
-                                                        (Just headers) -> Pact.convertHeadersFromJson headers
-                                                        Nothing        -> []
+                                  resHeaders        = Pact.convertHeadersFromJson $ Pact.responseHeaders response
                                   resBody           = case Pact.responseBody response of
                                                         (Just body)    -> encode body
                                                         Nothing        -> ""

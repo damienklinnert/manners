@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Pact
- ( Request(..)
+ ( Headers(..)
+ , Request(..)
  , Response(..)
  , Interaction(..)
  , InteractionWrapper(..)
@@ -13,7 +14,8 @@ module Pact
  , convertHeadersFromJson
  ) where
 
-import Data.Char (toUpper)
+import Data.Char (toUpper, toLower)
+import Data.Maybe (fromMaybe)
 import qualified Data.Text as T
 import qualified Data.List as L
 import qualified Data.ByteString.Char8 as CS
@@ -24,7 +26,6 @@ import qualified Data.HashMap.Strict as HM
 import qualified Data.Vector as V
 import Data.Aeson
 import qualified Data.Aeson.Types as AT
-import Control.Monad (liftM)
 import qualified Network.HTTP.Types.Header as HTH
 import qualified Data.CaseInsensitive as CI
 
@@ -32,17 +33,31 @@ hasNullValue :: AT.Pair -> Bool
 hasNullValue (_, Null) = True
 hasNullValue _ = False
 
+newtype Headers = Headers [(String, String)]
+  deriving (Eq, Show)
+
+instance Monoid Headers where
+  mempty = Headers []
+  mappend (Headers as) (Headers bs) = Headers (L.union as bs)
+
+instance FromJSON Headers where
+  parseJSON x = Headers . HM.toList <$> parseJSON x
+
+instance ToJSON Headers where
+  toJSON (Headers hs) = toJSON $ HM.fromList hs
+
 data Request = Request
  { requestMethod :: String
  , requestPath :: String
  , requestQuery :: Maybe String
- , requestHeaders :: Maybe Object
+ , requestHeaders :: Headers
  , requestBody :: Maybe Value
  } deriving (Show, Eq)
 
 instance FromJSON Request where
-  parseJSON (Object v) = Request <$> v .: "method" <*> v .: "path" <*> liftM normalizedQuery (v .:? "query") <*> v .:? "headers" <*> v .:? "body"
+  parseJSON (Object v) = Request <$> v .: "method" <*> v .: "path" <*> fmap normalizedQuery (v .:? "query") <*> headers <*> v .:? "body"
     where
+      headers = fmap (fromMaybe mempty) $ v .:? "headers"
       normalizedQuery :: Maybe Value -> Maybe String
       normalizedQuery Nothing = Nothing
       normalizedQuery (Just (String x)) = Just $ T.unpack x
@@ -70,12 +85,13 @@ instance ToJSON Request where
 
 data Response = Response
  { responseStatus :: Maybe Int
- , responseHeaders :: Maybe Object
+ , responseHeaders :: Headers
  , responseBody :: Maybe Value
  } deriving (Show, Eq)
 
 instance FromJSON Response where
-  parseJSON (Object v) = Response <$> v .:? "status" <*> v .:? "headers" <*> v .:?"body"
+  parseJSON (Object v) = Response <$> v .:? "status" <*> headers <*> v .:?"body"
+    where headers = fmap (fromMaybe mempty) $ v .:? "headers"
   parseJSON _ = error "Could not parse Pact.Response"
 
 instance ToJSON Response where
@@ -168,13 +184,10 @@ verifyQuery (Just _) Nothing = False
 verifyQuery (Just expected) (Just actual) = toQ expected == toQ actual
   where toQ s = L.sortOn fst $ H.parseSimpleQuery (CS.pack s)
 
-verifyHeaders :: Maybe Object -> Maybe Object -> Diff
-verifyHeaders Nothing _ = True
-verifyHeaders (Just _) Nothing = False
-verifyHeaders (Just expected) (Just actual) = sanitize expected == (HM.intersection (sanitize actual) (sanitize expected))
-  where sanitize obj = HM.fromList $ map (\(k,v) -> (T.toLower k, fixValue v)) $ HM.toList obj
-        fixValue (String v) = T.filter (/= ' ') v
-        fixValue _ = error "Unexpected value for verifyHeaders.sanitize"
+verifyHeaders :: Headers -> Headers -> Diff
+verifyHeaders (Headers expected) (Headers actual) = sanitize expected == (L.intersect (sanitize actual) (sanitize expected))
+  where sanitize obj = map (\(k,v) -> (toLower <$> k, fixValue v)) obj
+        fixValue = filter (/= ' ')
 
 verifyBodyStrict :: Maybe Value -> Maybe Value -> Diff
 verifyBodyStrict Nothing _ = True
@@ -201,12 +214,11 @@ verifyStatus Nothing _ = True
 verifyStatus (Just _) Nothing = False
 verifyStatus(Just expected) (Just actual) = expected == actual
 
-convertHeadersToJson :: [HTH.Header] -> Object
-convertHeadersToJson headers = HM.fromList $ map toTextPair headers
-  where toTextPair (k, v) = (E.decodeUtf8 $ CI.foldedCase k, String $ E.decodeUtf8 v)
+convertHeadersToJson :: [HTH.Header] -> Headers
+convertHeadersToJson headers = Headers $ map toTextPair headers
+  where toTextPair (k, v) = (T.unpack . E.decodeUtf8 $ CI.foldedCase k, T.unpack $ E.decodeUtf8 v)
 
-convertHeadersFromJson :: Object -> [HTH.Header]
-convertHeadersFromJson headers = map fromTextPair $ HM.toList headers
+convertHeadersFromJson :: Headers -> [HTH.Header]
+convertHeadersFromJson (Headers hs) = map fromTextPair $ hs
   where
-    fromTextPair (k, (String v)) = (CI.mk $ E.encodeUtf8 k, E.encodeUtf8 v)
-    fromTextPair _ = error "Can't convert headers from json"
+    fromTextPair (k, v) = (CI.mk . E.encodeUtf8 $ T.pack k, E.encodeUtf8 $ T.pack v)
