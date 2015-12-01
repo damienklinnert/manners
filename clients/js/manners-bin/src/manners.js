@@ -11,7 +11,7 @@ var filePathForPlatform = function (platform) {
 };
 
 module.exports = new BinWrapper()
-  .src(BASE + filePathForPlatform('darwin'), 'darwin')
-  .src(BASE + filePathForPlatform('linux'), 'linux', 'x64')
+  .src(BASE + filePathForPlatform('darwin') + '.tar.gz', 'darwin')
+  .src(BASE + filePathForPlatform('linux') + '.tar.gz', 'linux', 'x64')
   .dest(path.join('vendor'))
   .use(filePathForPlatform(process.platform));

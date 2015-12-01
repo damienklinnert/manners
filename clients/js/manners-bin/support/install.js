@@ -8,10 +8,5 @@ mannersBin.run(['--version'], function (err) {
     return console.error(err);
   }
 
-  console.log('manners installed, unpacking');
-  spawn('gzexe', ['-d', mannersBin.path()], { stdio: 'inherit' })
-  .on('exit', function () {
-    console.log('manners unpacked, ready');
-  });
-
+  console.log('manners installed');
 });
