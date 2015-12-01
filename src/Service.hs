@@ -8,7 +8,6 @@ import System.IO (stdout, hFlush)
 import qualified Data.List as L
 import qualified Data.ByteString.Char8 as C
 import qualified Data.ByteString.Lazy as BL
-import qualified Control.Concurrent.MVar as M
 import Data.Aeson as Aeson
 import qualified Data.Aeson.Encode.Pretty as EP
 import qualified Network.Wai as W
@@ -36,10 +35,10 @@ runProviderService :: Port -> IO ()
 runProviderService p = do
   putStrLn $ "manners: listening on port " ++ (show p)
   hFlush stdout
-  fakeProviderState <- M.newMVar $ Provider.initialFakeProvider
+  fakeProviderState <- Provider.newFakeProviderState
   Warp.run p (providerService fakeProviderState)
 
-providerService :: M.MVar Provider.FakeProvider -> W.Application
+providerService :: Provider.FakeProviderState -> W.Application
 providerService fakeProviderState request respond =
   case route of
 
@@ -48,8 +47,8 @@ providerService fakeProviderState request respond =
       body <- W.strictRequestBody request
       let (Just interaction) = Aeson.decode body :: Maybe Pact.Interaction
       putStrLn (show interaction)
-      M.modifyMVar_ fakeProviderState (\fakeProvider -> return $ Provider.addInteraction fakeProvider interaction )
-      M.readMVar fakeProviderState >>= (putStrLn . show)
+      Provider.runDebug fakeProviderState $
+        Provider.addInteraction interaction
       respond $ W.responseLBS H.status200 [("Content-Type", "text/plain")] "Add interaction"
 
     ("PUT", ["interactions"], True) -> do
@@ -58,23 +57,22 @@ providerService fakeProviderState request respond =
       let (Just interactionWrapper) = Aeson.decode body :: Maybe Pact.InteractionWrapper
       let interactions = Pact.wrapperInteractions interactionWrapper
       putStrLn (show interactions)
-      M.modifyMVar_ fakeProviderState (\fakeProvider -> return $ Provider.setInteractions fakeProvider interactions )
-      M.readMVar fakeProviderState >>= (putStrLn . show)
+      Provider.runDebug fakeProviderState $
+        Provider.setInteractions interactions
       respond $ W.responseLBS H.status200 [("Content-Type", "text/plain")] "Sets all interactions"
 
     ("DELETE", ["interactions"], True) -> do
       putStrLn "Reset interactions"
-      M.modifyMVar_ fakeProviderState (\fakeProvider -> return $ Provider.resetInteractions fakeProvider )
-      M.readMVar fakeProviderState >>= (putStrLn . show)
+      Provider.runDebug fakeProviderState $
+        Provider.resetInteractions
       respond $ W.responseLBS H.status200 [("Content-Type", "text/plain")] "Delete registered interactions"
 
     ("GET", ["interactions", "verification"], True) -> do
       putStrLn "Verify interactions"
-      fakeProvider <- M.readMVar fakeProviderState
-      let isSuccessful = Provider.verifyInteractions fakeProvider
+      isSuccessful <- Provider.runDebug fakeProviderState $
+        Provider.verifyInteractions
       putStrLn (show $ isSuccessful)
       let responseCode = if isSuccessful then H.status200 else H.status500
-      M.readMVar fakeProviderState >>= (putStrLn . show)
       respond $ W.responseLBS responseCode [("Content-Type", "text/plain")] "Verify set-up interactions"
 
     ("POST", ["pact"], True) -> do
@@ -82,9 +80,9 @@ providerService fakeProviderState request respond =
       body <- W.strictRequestBody request
       let (Just contractDesc) = Aeson.decode body :: Maybe Pact.ContractDescription
       putStrLn (show contractDesc)
-      fakeProvider <- M.readMVar fakeProviderState
-      let verifiedInteractions = reverse $ Provider.verifiedInteractions fakeProvider
-      let contract = contractDesc { Pact.contractInteractions = verifiedInteractions }
+      verifiedInteractions <- Provider.runDebug fakeProviderState $
+        Provider.getVerifiedInteractions
+      let contract = contractDesc { Pact.contractInteractions = reverse verifiedInteractions }
       putStrLn (show contract)
       let marshalledContract = EP.encodePretty' encodePrettyCfg contract
       let fileName = "pact/" ++ (Pact.serviceName . Pact.contractConsumer $ contract) ++ "-" ++ (Pact.serviceName . Pact.contractProvider $ contract) ++ ".json"
@@ -104,11 +102,8 @@ providerService fakeProviderState request respond =
 
       putStrLn (show inputRequest)
 
-      fakeProvider <- M.readMVar fakeProviderState
-      let maybeInteraction = Provider.findInteractionForRequest fakeProvider inputRequest
-      let fakeProvider' = case maybeInteraction of (Just interaction) -> Provider.addInteractionMatch fakeProvider interaction
-                                                   Nothing            -> Provider.addMismatchedRequest fakeProvider inputRequest
-      M.modifyMVar_ fakeProviderState (\_ -> return fakeProvider')
+      maybeInteraction <- Provider.runDebug fakeProviderState $
+        Provider.recordRequest inputRequest
 
       respond $ case maybeInteraction of
         (Just interaction) -> let response          = Pact.interactionResponse interaction
