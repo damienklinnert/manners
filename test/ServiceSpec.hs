@@ -38,8 +38,8 @@ main = hspec $ around_ withFakeProvider $ do
       let b1 = encode $ Pact.Interaction
                           "a sample interaction"
                           (Just "stateless")
-                          (Pact.Request "get" "/sample" Nothing Nothing Nothing)
-                          (Pact.Response (Just 201) Nothing Nothing)
+                          (Pact.Request "get" "/sample" Nothing mempty Nothing)
+                          (Pact.Response (Just 201) mempty Nothing)
       r1 <- postWith adminOpts "http://localhost:2345/interactions" b1
       (r1 ^. responseStatus . statusCode) `shouldBe` 200
 
@@ -72,8 +72,8 @@ main = hspec $ around_ withFakeProvider $ do
                          [ Pact.Interaction
                            "another interaction"
                            (Just "some_state")
-                           (Pact.Request "GET" "/sample/call" Nothing Nothing Nothing)
-                           (Pact.Response (Just 400) (Just $ HM.fromList [("x-header", "here"), ("content-type", "application/json")]) (Just "bodycontent"))
+                           (Pact.Request "GET" "/sample/call" Nothing mempty Nothing)
+                           (Pact.Response (Just 400) (Pact.Headers [("x-header", "here"), ("content-type", "application/json")]) (Just "bodycontent"))
                          ]
       r8 <- putWith adminOpts "http://localhost:2345/interactions" b8
       (r8 ^. responseStatus . statusCode) `shouldBe` 200
@@ -110,10 +110,10 @@ main = hspec $ around_ withFakeProvider $ do
                          [ Pact.Interaction
                            "a request for hello"
                            Nothing
-                           (Pact.Request "get" "/sayHello" Nothing Nothing Nothing)
+                           (Pact.Request "get" "/sayHello" Nothing mempty Nothing)
                            (Pact.Response
                              (Just 200)
-                             (Just $ HM.fromList [("Content-Type", "application/json")])
+                             (Pact.Headers [("Content-Type", "application/json")])
                              (Just $ Object $ HM.fromList [("reply", String "Hello")]))
                          ]
       r1 <- putWith adminOpts "http://localhost:2345/interactions" b1
