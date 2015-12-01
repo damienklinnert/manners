@@ -38,7 +38,7 @@ main = hspec $ around_ withFakeProvider $ do
       let b1 = encode $ Pact.Interaction
                           "a sample interaction"
                           (Just "stateless")
-                          (Pact.Request "get" "/sample" Nothing mempty Nothing)
+                          (Pact.Request "get" "/sample" mempty mempty Nothing)
                           (Pact.Response (Just 201) mempty Nothing)
       r1 <- postWith adminOpts "http://localhost:2345/interactions" b1
       (r1 ^. responseStatus . statusCode) `shouldBe` 200
@@ -72,7 +72,7 @@ main = hspec $ around_ withFakeProvider $ do
                          [ Pact.Interaction
                            "another interaction"
                            (Just "some_state")
-                           (Pact.Request "GET" "/sample/call" Nothing mempty Nothing)
+                           (Pact.Request "GET" "/sample/call" mempty mempty Nothing)
                            (Pact.Response (Just 400) (Pact.Headers [("x-header", "here"), ("content-type", "application/json")]) (Just "bodycontent"))
                          ]
       r8 <- putWith adminOpts "http://localhost:2345/interactions" b8
@@ -110,7 +110,7 @@ main = hspec $ around_ withFakeProvider $ do
                          [ Pact.Interaction
                            "a request for hello"
                            Nothing
-                           (Pact.Request "get" "/sayHello" Nothing mempty Nothing)
+                           (Pact.Request "get" "/sayHello" mempty mempty Nothing)
                            (Pact.Response
                              (Just 200)
                              (Pact.Headers [("Content-Type", "application/json")])

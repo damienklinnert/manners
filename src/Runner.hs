@@ -55,16 +55,16 @@ runContract path baseUrl = do
       print actualResponse
       S.exitFailure
 
-performRequest :: BaseUrl -> P.Request -> IO (P.Response)
+performRequest :: BaseUrl -> P.Request -> IO P.Response
 performRequest baseUrl req = performMethod method url opts body
   where
     method = CI.foldedCase . CI.mk $ P.requestMethod req
     headers = P.convertHeadersFromJson $ P.requestHeaders req
-    url = baseUrl ++ (P.requestPath req) ++ (M.fromMaybe "" ((P.requestQuery req) >>= (\x -> return ("?" ++ x))))
+    url = baseUrl ++ P.requestPath req ++ P.queryString True (P.requestQuery req)
     opts = (W.defaults & W.checkStatus .~ (Just (\_ _ _-> Nothing)) & W.headers .~ headers)
     body = (M.fromMaybe "" ((P.requestBody req) >>= (\x -> return $ A.encode x)))
 
-performMethod :: String -> String -> W.Options -> BL.ByteString -> IO (P.Response)
+performMethod :: String -> String -> W.Options -> BL.ByteString -> IO P.Response
 performMethod "get" url options _ = serialiseResponse <$> W.getWith options url
 performMethod "post" url options body = serialiseResponse <$> W.postWith options url body
 performMethod "put" url options body = serialiseResponse <$> W.putWith options url body
