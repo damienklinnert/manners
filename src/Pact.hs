@@ -47,6 +47,7 @@ instance FromJSON Headers where
   parseJSON x = Headers . HM.toList <$> parseJSON x
 
 instance ToJSON Headers where
+  toJSON (Headers []) = Null
   toJSON (Headers hs) = toJSON $ HM.fromList hs
 
 newtype Query = Query [(BS.ByteString, BS.ByteString)]
@@ -57,7 +58,8 @@ instance Monoid Query where
   mappend (Query as) (Query bs) = Query (as ++ bs)
 
 instance ToJSON Query where
-  toJSON = String . T.pack . queryString False
+  toJSON (Query []) = Null
+  toJSON x = String . T.pack $ queryString False x
 
 queryString :: Bool -> Query -> String
 queryString qm (Query qs) = CS.unpack $ H.renderSimpleQuery qm qs
