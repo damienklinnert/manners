@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Pact
- ( Headers(..)
+ ( Query(..), queryString
+ , Headers(..)
  , Request(..)
  , Response(..)
  , Interaction(..)
@@ -16,6 +17,7 @@ module Pact
 
 import Data.Char (toUpper, toLower)
 import Data.Maybe (fromMaybe)
+import Data.Function (on)
 import qualified Data.Text as T
 import qualified Data.List as L
 import qualified Data.ByteString.Char8 as CS
@@ -47,33 +49,54 @@ instance FromJSON Headers where
 instance ToJSON Headers where
   toJSON (Headers hs) = toJSON $ HM.fromList hs
 
+newtype Query = Query [(BS.ByteString, BS.ByteString)]
+  deriving (Eq, Show)
+
+instance Monoid Query where
+  mempty = Query []
+  mappend (Query as) (Query bs) = Query (as ++ bs)
+
+instance ToJSON Query where
+  toJSON = String . T.pack . queryString False
+
+queryString :: Bool -> Query -> String
+queryString qm (Query qs) = CS.unpack $ H.renderSimpleQuery qm qs
+
+normalizedQuery :: Value -> Either String Query
+normalizedQuery (String x) = Right . Query . H.parseSimpleQuery . CS.pack $ T.unpack x
+normalizedQuery (Object x) = Query <$> mapToSimpleQuery x
+normalizedQuery _ = Left "Could not normalize query for request"
+
+mapToSimpleQuery :: HM.HashMap T.Text Value -> Either String [(BS.ByteString, BS.ByteString)]
+mapToSimpleQuery m = L.sortBy (compare `on` fst) . concat <$> mapM flattenQuery (HM.toList m)
+
+flattenQuery :: (T.Text, Value) -> Either String [(BS.ByteString, BS.ByteString)]
+flattenQuery (k, (Array vs)) = mapM (byteStringPairs k) $ V.toList vs
+flattenQuery (k, s@(String _)) = pure <$> byteStringPairs k s
+flattenQuery _ = Left "Could not flatten query for request"
+
+byteStringPairs :: T.Text -> Value -> Either String (BS.ByteString, BS.ByteString)
+byteStringPairs key (String val) = Right (E.encodeUtf8 key, E.encodeUtf8 val)
+byteStringPairs _ _ = Left "Could not convert to byte string pairs"
+
 data Request = Request
  { requestMethod :: String
  , requestPath :: String
- , requestQuery :: Maybe String
+ , requestQuery :: Query
  , requestHeaders :: Headers
  , requestBody :: Maybe Value
  } deriving (Show, Eq)
 
 instance FromJSON Request where
-  parseJSON (Object v) = Request <$> v .: "method" <*> v .: "path" <*> fmap normalizedQuery (v .:? "query") <*> headers <*> v .:? "body"
+  parseJSON (Object v) = Request <$> v .: "method" <*> v .: "path" <*> query <*> headers <*> v .:? "body"
     where
       headers = fmap (fromMaybe mempty) $ v .:? "headers"
-      normalizedQuery :: Maybe Value -> Maybe String
-      normalizedQuery Nothing = Nothing
-      normalizedQuery (Just (String x)) = Just $ T.unpack x
-      normalizedQuery (Just (Object x)) = Just $ CS.unpack $ H.renderSimpleQuery False $ mapToSimpleQuery x
-      normalizedQuery _ = error "Could not normalize query for request"
-      mapToSimpleQuery :: HM.HashMap T.Text Value -> [(BS.ByteString, BS.ByteString)]
-      mapToSimpleQuery m = L.sortBy (\(f, _) (g, _)-> f `compare` g) $ concat $ map flattenQuery $ HM.toList m
-      flattenQuery :: (T.Text, Value) -> [(BS.ByteString, BS.ByteString)]
-      flattenQuery (k, (Array vs)) = map (byteStringPairs k) $ V.toList vs
-      flattenQuery (k, s@(String _)) = [byteStringPairs k s]
-      flattenQuery _ = error "Could not flatten query for request"
-      byteStringPairs :: T.Text -> Value -> (BS.ByteString, BS.ByteString)
-      byteStringPairs key (String val) = (E.encodeUtf8 key, E.encodeUtf8 val)
-      byteStringPairs _ _ = error "Could not convert to byte string pairs"
-  parseJSON _ = error "Could not parse Pact.Request"
+      query = do
+        maybeQ <- v .:? "query"
+        case maybeQ of
+          Nothing -> pure mempty
+          Just q -> either fail pure $ normalizedQuery q
+  parseJSON _ = fail "Could not parse Pact.Request"
 
 instance ToJSON Request where
   toJSON (Request method path query headers body) = object $ filter (not . hasNullValue)
@@ -179,11 +202,9 @@ verifyMethod expected actual = uppercase expected == uppercase actual
 verifyPath :: String -> String -> Diff
 verifyPath = (==)
 
-verifyQuery :: Maybe String -> Maybe String -> Diff
-verifyQuery Nothing _ = True
-verifyQuery (Just _) Nothing = False
-verifyQuery (Just expected) (Just actual) = toQ expected == toQ actual
-  where toQ s = L.sortOn fst $ H.parseSimpleQuery (CS.pack s)
+verifyQuery :: Query -> Query -> Diff
+verifyQuery (Query expected) (Query actual) = toQ expected == toQ actual
+  where toQ s = L.sortOn fst s
 
 verifyHeaders :: Headers -> Headers -> Diff
 verifyHeaders (Headers expected) (Headers actual) = sanitize expected == (L.intersect (sanitize actual) (sanitize expected))
