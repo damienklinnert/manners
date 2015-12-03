@@ -209,3 +209,6 @@ main = hspec $ around_ withFakeProvider $ do
       let (Just model) = decode modelContents :: Maybe Pact.ContractDescription
       let (Just generated) = decode generatedContents :: Maybe Pact.ContractDescription
       model `shouldBe` generated
+
+      -- generated contract should match the model byte by byte (to play nicely with vcs)
+      modelContents `shouldBe` generatedContents
