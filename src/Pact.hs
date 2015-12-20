@@ -10,6 +10,7 @@ module Pact
  , ContractDescription(..)
  , validateRequest
  , validateResponse
+ , ValidationError(..)
  , convertHeadersToJson
  , convertHeadersFromJson
  ) where
@@ -29,7 +30,6 @@ import Data.Aeson
 import qualified Data.Aeson.Types as AT
 import qualified Network.HTTP.Types.Header as HTH
 import qualified Data.CaseInsensitive as CI
-import Data.Monoid (All(..))
 
 hasNullValue :: AT.Pair -> Bool
 hasNullValue (_, Null) = True
@@ -178,51 +178,69 @@ instance ToJSON ContractDescription where
    , "interactions" .= interactions
    ]
 
-data ValidationError = ValidationError deriving (Eq, Show)
+data ValidationError = MethodValidationError String String
+                     | PathValidationError String String
+                     | QueryValidationError
+                     | StatusValidationError Int Int
+                     | HeaderValidationError
+                     | BodyValidationError
+                     deriving (Eq, Show)
 
 validateRequest :: Request -> Request -> [ValidationError]
-validateRequest expected actual = if getAll $ foldMap All
- [ verifyMethod (requestMethod expected) (requestMethod actual)
- , verifyPath (requestPath expected) (requestPath actual)
- , verifyQuery (requestQuery expected) (requestQuery actual)
- , verifyHeaders (requestHeaders expected) (requestHeaders actual)
- , verifyBodyStrict (requestBody expected) (requestBody actual)
- ] then [] else [ValidationError]
+validateRequest expected actual = concat
+ [ validateMethod (requestMethod expected) (requestMethod actual)
+ , validatePath (requestPath expected) (requestPath actual)
+ , validateQuery (requestQuery expected) (requestQuery actual)
+ , validateHeaders (requestHeaders expected) (requestHeaders actual)
+ , validateBodyStrict (requestBody expected) (requestBody actual)
+ ]
 
 validateResponse :: Response -> Response -> [ValidationError]
-validateResponse expected actual = if foldl1 (&&)
- [ verifyStatus (responseStatus expected) (responseStatus actual)
- , verifyHeaders (responseHeaders expected) (responseHeaders actual)
- , verifyBody (responseBody expected) (responseBody actual)
- ] then [] else [ValidationError]
+validateResponse expected actual = concat
+ [ validateStatus (responseStatus expected) (responseStatus actual)
+ , validateHeaders (responseHeaders expected) (responseHeaders actual)
+ , validateBody (responseBody expected) (responseBody actual)
+ ]
 
-verifyMethod :: String -> String -> Bool
-verifyMethod expected actual = uppercase expected == uppercase actual
+validateMethod :: String -> String -> [ValidationError]
+validateMethod expected actual
+  | uppercase expected == uppercase actual = []
+  | otherwise                              = [MethodValidationError expected actual]
   where uppercase = map toUpper
 
-verifyPath :: String -> String -> Bool
-verifyPath = (==)
+validatePath :: String -> String -> [ValidationError]
+validatePath expected actual
+  | expected == actual = []
+  | otherwise          = [PathValidationError expected actual]
 
-verifyQuery :: Query -> Query -> Bool
-verifyQuery (Query expected) (Query actual) = toQ expected == toQ actual
+validateQuery :: Query -> Query -> [ValidationError]
+validateQuery (Query expected) (Query actual)
+  | toQ expected == toQ actual = []
+  | otherwise                  = [QueryValidationError]
   where toQ s = L.sortOn fst s
 
-verifyHeaders :: Headers -> Headers -> Bool
-verifyHeaders (Headers expected) (Headers actual) = sanitize expected == (L.intersect (sanitize actual) (sanitize expected))
+validateHeaders :: Headers -> Headers -> [ValidationError]
+validateHeaders (Headers expected) (Headers actual)
+  | sanitize expected == (L.intersect (sanitize actual) (sanitize expected)) = []
+  | otherwise                                                                = [HeaderValidationError]
   where sanitize obj = map (\(k,v) -> (toLower <$> k, fixValue v)) obj
         fixValue = filter (/= ' ')
 
-verifyBodyStrict :: Maybe Value -> Maybe Value -> Bool
-verifyBodyStrict Nothing _ = True
-verifyBodyStrict (Just _) Nothing = False
-verifyBodyStrict (Just expected) (Just actual) = expectedObj == actualObj
+validateBodyStrict :: Maybe Value -> Maybe Value -> [ValidationError]
+validateBodyStrict Nothing _ = []
+validateBodyStrict (Just _) Nothing = [BodyValidationError]
+validateBodyStrict (Just expected) (Just actual)
+  | expectedObj == actualObj = []
+  | otherwise                = [BodyValidationError]
   where expectedObj = HM.fromList [("value" :: String, expected :: Value)]
         actualObj = HM.fromList [("value" :: String, actual :: Value)]
 
-verifyBody :: Maybe Value -> Maybe Value -> Bool
-verifyBody Nothing _ = True
-verifyBody (Just _) Nothing = False
-verifyBody (Just expected) (Just actual) = expectedObj == intersect actualObj expectedObj
+validateBody :: Maybe Value -> Maybe Value -> [ValidationError]
+validateBody Nothing _ = []
+validateBody (Just _) Nothing = [BodyValidationError]
+validateBody (Just expected) (Just actual)
+  | expectedObj == intersect actualObj expectedObj = []
+  | otherwise                                      = [BodyValidationError]
   where expectedObj = Object $ HM.fromList [("value" :: T.Text, expected :: Value)]
         actualObj = Object $ HM.fromList [("value" :: T.Text, actual :: Value)]
         intersect :: Value -> Value -> Value
@@ -232,10 +250,12 @@ verifyBody (Just expected) (Just actual) = expectedObj == intersect actualObj ex
            $ HM.intersection vals filts
         intersect x _ = x
 
-verifyStatus :: Maybe Int -> Maybe Int -> Bool
-verifyStatus Nothing _ = True
-verifyStatus (Just _) Nothing = False
-verifyStatus(Just expected) (Just actual) = expected == actual
+validateStatus :: Maybe Int -> Maybe Int -> [ValidationError]
+validateStatus Nothing _ = []
+validateStatus (Just _) Nothing = error "Can't validate status without an actual value"
+validateStatus(Just expected) (Just actual)
+  | expected == actual = []
+  | otherwise          = [StatusValidationError expected actual]
 
 convertHeadersToJson :: [HTH.Header] -> Headers
 convertHeadersToJson headers = Headers $ map toTextPair headers
