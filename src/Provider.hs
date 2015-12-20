@@ -40,7 +40,7 @@ resetInteractions :: State FakeProvider ()
 resetInteractions = modify $ \p -> p { activeInteractions = [], mismatchedRequests = [], matchedInteractions = [] }
 
 findInteractionForRequest :: P.Request -> State FakeProvider (Maybe P.Interaction)
-findInteractionForRequest req = gets $ \p -> L.find (\i -> P.diffRequests (P.interactionRequest i) req) $ activeInteractions p
+findInteractionForRequest req = gets $ \p -> L.find (\i -> P.validateRequest (P.interactionRequest i) req == []) $ activeInteractions p
 
 addInteractionMatch :: P.Interaction -> State FakeProvider ()
 addInteractionMatch i = modify $ \p -> p

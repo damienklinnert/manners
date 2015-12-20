@@ -8,9 +8,8 @@ module Pact
  , InteractionWrapper(..)
  , ServiceDescription(..)
  , ContractDescription(..)
- , Diff
- , diffRequests
- , diffResponses
+ , validateRequest
+ , validateResponse
  , convertHeadersToJson
  , convertHeadersFromJson
  ) where
@@ -179,48 +178,48 @@ instance ToJSON ContractDescription where
    , "interactions" .= interactions
    ]
 
-type Diff = Bool
+data ValidationError = ValidationError deriving (Eq, Show)
 
-diffRequests :: Request -> Request -> Diff
-diffRequests expected actual = getAll $ foldMap All
+validateRequest :: Request -> Request -> [ValidationError]
+validateRequest expected actual = if getAll $ foldMap All
  [ verifyMethod (requestMethod expected) (requestMethod actual)
  , verifyPath (requestPath expected) (requestPath actual)
  , verifyQuery (requestQuery expected) (requestQuery actual)
  , verifyHeaders (requestHeaders expected) (requestHeaders actual)
  , verifyBodyStrict (requestBody expected) (requestBody actual)
- ]
+ ] then [] else [ValidationError]
 
-diffResponses :: Response -> Response -> Diff
-diffResponses expected actual = foldl1 (&&)
+validateResponse :: Response -> Response -> [ValidationError]
+validateResponse expected actual = if foldl1 (&&)
  [ verifyStatus (responseStatus expected) (responseStatus actual)
  , verifyHeaders (responseHeaders expected) (responseHeaders actual)
  , verifyBody (responseBody expected) (responseBody actual)
- ]
+ ] then [] else [ValidationError]
 
-verifyMethod :: String -> String -> Diff
+verifyMethod :: String -> String -> Bool
 verifyMethod expected actual = uppercase expected == uppercase actual
   where uppercase = map toUpper
 
-verifyPath :: String -> String -> Diff
+verifyPath :: String -> String -> Bool
 verifyPath = (==)
 
-verifyQuery :: Query -> Query -> Diff
+verifyQuery :: Query -> Query -> Bool
 verifyQuery (Query expected) (Query actual) = toQ expected == toQ actual
   where toQ s = L.sortOn fst s
 
-verifyHeaders :: Headers -> Headers -> Diff
+verifyHeaders :: Headers -> Headers -> Bool
 verifyHeaders (Headers expected) (Headers actual) = sanitize expected == (L.intersect (sanitize actual) (sanitize expected))
   where sanitize obj = map (\(k,v) -> (toLower <$> k, fixValue v)) obj
         fixValue = filter (/= ' ')
 
-verifyBodyStrict :: Maybe Value -> Maybe Value -> Diff
+verifyBodyStrict :: Maybe Value -> Maybe Value -> Bool
 verifyBodyStrict Nothing _ = True
 verifyBodyStrict (Just _) Nothing = False
 verifyBodyStrict (Just expected) (Just actual) = expectedObj == actualObj
   where expectedObj = HM.fromList [("value" :: String, expected :: Value)]
         actualObj = HM.fromList [("value" :: String, actual :: Value)]
 
-verifyBody :: Maybe Value -> Maybe Value -> Diff
+verifyBody :: Maybe Value -> Maybe Value -> Bool
 verifyBody Nothing _ = True
 verifyBody (Just _) Nothing = False
 verifyBody (Just expected) (Just actual) = expectedObj == intersect actualObj expectedObj
@@ -233,7 +232,7 @@ verifyBody (Just expected) (Just actual) = expectedObj == intersect actualObj ex
            $ HM.intersection vals filts
         intersect x _ = x
 
-verifyStatus :: Maybe Int -> Maybe Int -> Diff
+verifyStatus :: Maybe Int -> Maybe Int -> Bool
 verifyStatus Nothing _ = True
 verifyStatus (Just _) Nothing = False
 verifyStatus(Just expected) (Just actual) = expected == actual
