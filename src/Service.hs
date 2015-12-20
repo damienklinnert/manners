@@ -102,20 +102,21 @@ providerService fakeProviderState request respond =
 
       putStrLn (show inputRequest)
 
-      maybeInteraction <- Provider.runDebug fakeProviderState $
+      eitherInteraction <- Provider.runDebug fakeProviderState $
         Provider.recordRequest inputRequest
 
-      respond $ case maybeInteraction of
-        (Just interaction) -> let response          = Pact.interactionResponse interaction
-                                  resStatus         = toEnum $ case Pact.responseStatus response of
-                                                        (Just statusCode) -> statusCode
-                                                        Nothing           -> 200
-                                  resHeaders        = Pact.convertHeadersFromJson $ Pact.responseHeaders response
-                                  resBody           = case Pact.responseBody response of
-                                                        (Just body)    -> encode body
-                                                        Nothing        -> ""
-                              in W.responseLBS resStatus resHeaders resBody
-        Nothing -> W.responseLBS H.status500 [] ""
+      respond $ case eitherInteraction of
+        (Right interaction) -> let response          = Pact.interactionResponse interaction
+                                   resStatus         = toEnum $ case Pact.responseStatus response of
+                                                         (Just statusCode) -> statusCode
+                                                         Nothing           -> 200
+                                   resHeaders        = Pact.convertHeadersFromJson $ Pact.responseHeaders response
+                                   resBody           = case Pact.responseBody response of
+                                                         (Just body)    -> encode body
+                                                         Nothing        -> ""
+                               in W.responseLBS resStatus resHeaders resBody
+        (Left []) -> W.responseLBS H.status500 [("Content-Type", "application/json")] $ encodeAPIError APIErrorNoInteractionsConfigured
+        (Left failures) -> W.responseLBS H.status500 [("Content-Type", "application/json")] . encodeAPIError $ APIErrorNoInteractionMatch failures
 
   where route = (W.requestMethod request, W.pathInfo request, isAdminRequest)
         isAdminRequest =
@@ -123,3 +124,26 @@ providerService fakeProviderState request respond =
             of (Just _) -> True
                _ -> False
         hasAdminHeader (h, v) = CI.mk h == CI.mk "X-Pact-Mock-Service" && CI.mk v == CI.mk "True"
+
+data APIError = APIErrorNoInteractionsConfigured
+              | APIErrorNoInteractionMatch [(Pact.Interaction, [Pact.ValidationError])]
+
+instance ToJSON APIError where
+  toJSON APIErrorNoInteractionsConfigured = object
+    [ "error" .= ("APIErrorNoInteractionsConfigured" :: String)
+    , "description" .= ("No interactions are configured yet" :: String)
+    ]
+  toJSON (APIErrorNoInteractionMatch failures) = object
+    [ "error" .= ("APIErrorNoInteractionMatch" :: String)
+    , "description" .= ("No matching interaction found" :: String)
+    , "failedValidations" .= map formatFailure failures
+    ]
+    where
+      formatFailure (interaction, errors) = object ["interaction" .= interaction, "errors" .= errors]
+
+encodeAPIError :: APIError -> BL.ByteString
+encodeAPIError err = EP.encodePretty' encodeAPIErrorCfg err
+  where
+    encodeAPIErrorCfg :: EP.Config
+    encodeAPIErrorCfg = EP.Config { EP.confIndent = 4, EP.confCompare = cmp }
+      where cmp = EP.keyOrder [ "error", "description", "failedValidations", "interaction", "errors" ]

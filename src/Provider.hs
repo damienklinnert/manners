@@ -39,8 +39,11 @@ setInteractions is = modify $ \p -> p { activeInteractions = is }
 resetInteractions :: State FakeProvider ()
 resetInteractions = modify $ \p -> p { activeInteractions = [], mismatchedRequests = [], matchedInteractions = [] }
 
-findInteractionForRequest :: P.Request -> State FakeProvider (Maybe P.Interaction)
-findInteractionForRequest req = gets $ \p -> L.find (\i -> P.validateRequest (P.interactionRequest i) req == []) $ activeInteractions p
+findInteractionForRequest :: P.Request -> State FakeProvider ([(P.Interaction, [P.ValidationError])])
+findInteractionForRequest req = gets $ \p -> map toTuple $ activeInteractions p
+  where
+    toTuple :: P.Interaction -> (P.Interaction, [P.ValidationError])
+    toTuple interaction = (interaction, P.validateRequest (P.interactionRequest interaction) req)
 
 addInteractionMatch :: P.Interaction -> State FakeProvider ()
 addInteractionMatch i = modify $ \p -> p
@@ -51,13 +54,18 @@ addInteractionMatch i = modify $ \p -> p
 addMismatchedRequest :: P.Request -> State FakeProvider ()
 addMismatchedRequest i = modify $ \p -> p { mismatchedRequests = (i : mismatchedRequests p) }
 
-recordRequest :: P.Request -> State FakeProvider (Maybe P.Interaction)
+recordRequest :: P.Request -> State FakeProvider (Either [(P.Interaction, [P.ValidationError])] P.Interaction)
 recordRequest req = do
-  maybeInteraction <- findInteractionForRequest req
-  case maybeInteraction of
-    Just interaction -> addInteractionMatch interaction
-    Nothing -> addMismatchedRequest req
-  return maybeInteraction
+  interactions <- findInteractionForRequest req
+  let (successful, failed) = L.partition (\(_, errors) -> errors == []) interactions
+  case successful of
+    -- we only care about the first match and ignore later matches
+    ((interaction, _):_) -> do
+      addInteractionMatch interaction
+      pure (Right interaction)
+    [] -> do
+      addMismatchedRequest req
+      pure (Left failed)
 
 verifyInteractions :: State FakeProvider Bool
 verifyInteractions = gets $ \p -> (length $ mismatchedRequests p) == 0 && (length $ matchedInteractions p) == (length $ activeInteractions p)
