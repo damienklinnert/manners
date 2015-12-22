@@ -142,8 +142,14 @@ instance ToJSON APIError where
       formatFailure (interaction, errors) = object ["interaction" .= interaction, "errors" .= errors]
 
 encodeAPIError :: APIError -> BL.ByteString
-encodeAPIError err = EP.encodePretty' encodeAPIErrorCfg err
+encodeAPIError err = EP.encodePretty' encodeAPIErrorCfg (APIResponseFailure err :: APIResponse () APIError)
   where
     encodeAPIErrorCfg :: EP.Config
     encodeAPIErrorCfg = EP.Config { EP.confIndent = 4, EP.confCompare = cmp }
       where cmp = EP.keyOrder [ "error", "description", "failedValidations", "interaction", "errors" ]
+
+data APIResponse a b = APIResponseSuccess a | APIResponseFailure b
+
+instance (ToJSON a, ToJSON b) => ToJSON (APIResponse a b) where
+  toJSON (APIResponseSuccess d) = object ["data" .= d]
+  toJSON (APIResponseFailure e) = object ["error" .= e]
