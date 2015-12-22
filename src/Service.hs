@@ -130,23 +130,23 @@ data APIError = APIErrorNoInteractionsConfigured
 
 instance ToJSON APIError where
   toJSON APIErrorNoInteractionsConfigured = object
-    [ "error" .= ("APIErrorNoInteractionsConfigured" :: String)
+    [ "name" .= ("APIErrorNoInteractionsConfigured" :: String)
     , "description" .= ("No interactions are configured yet" :: String)
     ]
   toJSON (APIErrorNoInteractionMatch failures) = object
-    [ "error" .= ("APIErrorNoInteractionMatch" :: String)
+    [ "name" .= ("APIErrorNoInteractionMatch" :: String)
     , "description" .= ("No matching interaction found" :: String)
-    , "failedValidations" .= map formatFailure failures
+    , "interactions" .= map formatFailure failures
     ]
     where
-      formatFailure (interaction, errors) = object ["interaction" .= interaction, "errors" .= errors]
+      formatFailure (interaction, errors) = object ["interaction" .= interaction, "failedValidations" .= errors]
 
 encodeAPIError :: APIError -> BL.ByteString
 encodeAPIError err = EP.encodePretty' encodeAPIErrorCfg (APIResponseFailure err :: APIResponse () APIError)
   where
     encodeAPIErrorCfg :: EP.Config
     encodeAPIErrorCfg = EP.Config { EP.confIndent = 4, EP.confCompare = cmp }
-      where cmp = EP.keyOrder [ "error", "description", "failedValidations", "interaction", "errors" ]
+      where cmp = EP.keyOrder [ "name", "description", "interactions", "interaction", "failedValidations" ]
 
 data APIResponse a b = APIResponseSuccess a | APIResponseFailure b
 
