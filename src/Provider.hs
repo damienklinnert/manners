@@ -11,7 +11,7 @@ module Provider
  , getVerifiedInteractions
  , FakeProviderState
  , newFakeProviderState
- , runDebug
+ , run
  ) where
 
 import Control.Concurrent.STM
@@ -91,8 +91,8 @@ liftTX m v = do
   writeTVar v s
   return (a, s)  
 
-runDebugTX :: FakeProviderState -> FakeProviderTX a -> IO a
-runDebugTX fps tx = atomically (tx fps) >>= \(a, s) -> print s >> return a
+runTX :: FakeProviderState -> FakeProviderTX a -> IO a
+runTX fps tx = atomically (tx fps) >>= \(a, _) -> pure a
 
-runDebug :: FakeProviderState -> State FakeProvider a -> IO a
-runDebug fps = runDebugTX fps . liftTX
+run :: FakeProviderState -> State FakeProvider a -> IO a
+run fps = runTX fps . liftTX

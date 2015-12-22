@@ -21,8 +21,6 @@ import qualified Data.CaseInsensitive as CI
 import qualified Pact as Pact
 import qualified Provider as Provider
 
-type Port = Int
-
 keyOrder :: [T.Text]
 keyOrder =
  [ "consumer", "provider", "interactions"
@@ -34,6 +32,7 @@ keyOrder =
 encodePrettyCfg :: EP.Config
 encodePrettyCfg = EP.Config { EP.confIndent = 4, EP.confCompare = EP.keyOrder keyOrder }
 
+type Port = Int
 
 runProviderService :: Port -> IO ()
 runProviderService p = do
@@ -47,53 +46,47 @@ providerService fakeProviderState request respond =
   case route of
 
     ("POST", ["interactions"], True) -> do
-      putStrLn "Setup interaction"
+      putStrLn "manners: add an interaction"
       body <- W.strictRequestBody request
       let (Just interaction) = Aeson.decode body :: Maybe Pact.Interaction
-      putStrLn (show interaction)
-      interactions <- Provider.runDebug fakeProviderState $ Provider.addInteraction interaction
+      interactions <- Provider.run fakeProviderState $ Provider.addInteraction interaction
       respond . responseData $ object ["interactions" .= interactions]
 
     ("PUT", ["interactions"], True) -> do
-      putStrLn "Set interactions"
+      putStrLn "manners: set all interactions"
       body <- W.strictRequestBody request
       let (Just interactionWrapper) = Aeson.decode body :: Maybe Pact.InteractionWrapper
       let interactions = Pact.wrapperInteractions interactionWrapper
-      putStrLn (show interactions)
-      Provider.runDebug fakeProviderState $
+      Provider.run fakeProviderState $
         Provider.setInteractions interactions
       respond . responseData $ object ["interactions" .= interactions]
 
     ("DELETE", ["interactions"], True) -> do
-      putStrLn "Reset interactions"
-      Provider.runDebug fakeProviderState $
+      putStrLn "manners: reset interactions"
+      Provider.run fakeProviderState $
         Provider.resetInteractions
       respond . responseData $ object ["interactions" .= ()]
 
     ("GET", ["interactions", "verification"], True) -> do
-      putStrLn "Verify interactions"
-      (isSuccessful, mismatchedRequests, matchedInteractions, activeInteractions) <- Provider.runDebug fakeProviderState $
+      putStrLn "manners: verify interactions"
+      (isSuccessful, mismatchedRequests, matchedInteractions, activeInteractions) <- Provider.run fakeProviderState $
         Provider.verifyInteractions
-      putStrLn (show $ isSuccessful)
       respond $ if isSuccessful then responseData Null else responseError $ APIErrorVerifyFailed mismatchedRequests matchedInteractions activeInteractions
 
     ("POST", ["pact"], True) -> do
-      putStrLn "Write pact"
+      putStrLn "manners: write contract"
       body <- W.strictRequestBody request
       let (Just contractDesc) = Aeson.decode body :: Maybe Pact.ContractDescription
-      putStrLn (show contractDesc)
-      verifiedInteractions <- Provider.runDebug fakeProviderState $
-        Provider.getVerifiedInteractions
+      verifiedInteractions <- Provider.run fakeProviderState $ Provider.getVerifiedInteractions
       let contract = contractDesc { Pact.contractInteractions = reverse verifiedInteractions }
-      putStrLn (show contract)
       let marshalledContract = EP.encodePretty' encodePrettyCfg contract
       let fileName = "pact/" ++ (Pact.serviceName . Pact.contractConsumer $ contract) ++ "-" ++ (Pact.serviceName . Pact.contractProvider $ contract) ++ ".json"
       D.createDirectoryIfMissing True "pact"
       BL.writeFile fileName marshalledContract
-      respond $ responseData (object ["generatedContract" .= fileName])
+      respond $ responseData (object ["contractPath" .= fileName, "contract" .= contract])
 
     _ -> do
-      putStrLn "Default handler"
+      putStrLn "manners: default handler"
       encodedBody <- W.strictRequestBody request
       let inMethod = C.unpack $ W.requestMethod request
       let inPath = filter (/='?') $ C.unpack $ W.rawPathInfo request
@@ -102,10 +95,7 @@ providerService fakeProviderState request respond =
       let inBody = decode encodedBody
       let inputRequest = Pact.Request inMethod inPath inQuery inHeaders inBody
 
-      putStrLn (show inputRequest)
-
-      eitherInteraction <- Provider.runDebug fakeProviderState $
-        Provider.recordRequest inputRequest
+      eitherInteraction <- Provider.run fakeProviderState $ Provider.recordRequest inputRequest
 
       respond $ case eitherInteraction of
         (Right interaction) -> let response          = Pact.interactionResponse interaction
