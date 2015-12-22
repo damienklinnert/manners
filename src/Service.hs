@@ -9,6 +9,7 @@ import System.IO (stdout, hFlush)
 import qualified Data.List as L
 import qualified Data.ByteString.Char8 as C
 import qualified Data.ByteString.Lazy as BL
+import qualified Data.Text as T
 import Data.Aeson as Aeson
 import qualified Data.Aeson.Encode.Pretty as EP
 import qualified Network.Wai as W
@@ -22,15 +23,17 @@ import qualified Provider as Provider
 
 type Port = Int
 
+keyOrder :: [T.Text]
+keyOrder =
+ [ "consumer", "provider", "interactions"
+ , "description", "provider_state", "request", "response"
+ , "status"
+ , "method", "path", "query", "headers", "body"
+ ]
+
 encodePrettyCfg :: EP.Config
-encodePrettyCfg = EP.Config { EP.confIndent = 4, EP.confCompare = cmp }
-  where
-    cmp = EP.keyOrder
-     [ "consumer", "provider", "interactions"
-     , "description", "provider_state", "request", "response"
-     , "status"
-     , "method", "path", "query", "headers", "body"
-     ]
+encodePrettyCfg = EP.Config { EP.confIndent = 4, EP.confCompare = EP.keyOrder keyOrder }
+
 
 runProviderService :: Port -> IO ()
 runProviderService p = do
@@ -50,7 +53,7 @@ providerService fakeProviderState request respond =
       putStrLn (show interaction)
       Provider.runDebug fakeProviderState $
         Provider.addInteraction interaction
-      respond $ responseData ()
+      respond . responseData $ object ["interaction" .= interaction]
 
     ("PUT", ["interactions"], True) -> do
       putStrLn "Set interactions"
@@ -60,13 +63,13 @@ providerService fakeProviderState request respond =
       putStrLn (show interactions)
       Provider.runDebug fakeProviderState $
         Provider.setInteractions interactions
-      respond $ responseData ()
+      respond . responseData $ object ["interactions" .= interactions]
 
     ("DELETE", ["interactions"], True) -> do
       putStrLn "Reset interactions"
       Provider.runDebug fakeProviderState $
         Provider.resetInteractions
-      respond $ responseData ()
+      respond . responseData $ object ["interactions" .= ()]
 
     ("GET", ["interactions", "verification"], True) -> do
       putStrLn "Verify interactions"
@@ -88,7 +91,7 @@ providerService fakeProviderState request respond =
       let fileName = "pact/" ++ (Pact.serviceName . Pact.contractConsumer $ contract) ++ "-" ++ (Pact.serviceName . Pact.contractProvider $ contract) ++ ".json"
       D.createDirectoryIfMissing True "pact"
       BL.writeFile fileName marshalledContract
-      respond $ responseData fileName
+      respond $ responseData (object ["generatedContract" .= fileName])
 
     _ -> do
       putStrLn "Default handler"
@@ -135,8 +138,8 @@ encodeAPI :: (ToJSON a, ToJSON b) => APIResponse a b -> BL.ByteString
 encodeAPI resp = EP.encodePretty' encodeAPICfg resp
   where
     encodeAPICfg :: EP.Config
-    encodeAPICfg = EP.Config { EP.confIndent = 4, EP.confCompare = cmp }
-      where cmp = EP.keyOrder [ "name", "description", "interactions", "interaction", "failedValidations" ]
+    encodeAPICfg = EP.Config { EP.confIndent = 4, EP.confCompare = EP.keyOrder cmp }
+      where cmp = [ "name", "description", "interactions", "interaction", "failedValidations" ] ++ keyOrder
 
 data APIResponse a b = APIResponseSuccess a | APIResponseFailure b
 instance (ToJSON a, ToJSON b) => ToJSON (APIResponse a b) where
