@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module Service
  ( runProviderService
  , Port
@@ -49,7 +50,7 @@ providerService fakeProviderState request respond =
       putStrLn (show interaction)
       Provider.runDebug fakeProviderState $
         Provider.addInteraction interaction
-      respond $ W.responseLBS H.status200 [("Content-Type", "text/plain")] "Add interaction"
+      respond $ responseData ()
 
     ("PUT", ["interactions"], True) -> do
       putStrLn "Set interactions"
@@ -59,21 +60,20 @@ providerService fakeProviderState request respond =
       putStrLn (show interactions)
       Provider.runDebug fakeProviderState $
         Provider.setInteractions interactions
-      respond $ W.responseLBS H.status200 [("Content-Type", "text/plain")] "Sets all interactions"
+      respond $ responseData ()
 
     ("DELETE", ["interactions"], True) -> do
       putStrLn "Reset interactions"
       Provider.runDebug fakeProviderState $
         Provider.resetInteractions
-      respond $ W.responseLBS H.status200 [("Content-Type", "text/plain")] "Delete registered interactions"
+      respond $ responseData ()
 
     ("GET", ["interactions", "verification"], True) -> do
       putStrLn "Verify interactions"
       isSuccessful <- Provider.runDebug fakeProviderState $
         Provider.verifyInteractions
       putStrLn (show $ isSuccessful)
-      let responseCode = if isSuccessful then H.status200 else H.status500
-      respond $ W.responseLBS responseCode [("Content-Type", "text/plain")] "Verify set-up interactions"
+      respond $ if isSuccessful then responseData () else responseError APIErrorVerifyFailed
 
     ("POST", ["pact"], True) -> do
       putStrLn "Write pact"
@@ -88,7 +88,7 @@ providerService fakeProviderState request respond =
       let fileName = "pact/" ++ (Pact.serviceName . Pact.contractConsumer $ contract) ++ "-" ++ (Pact.serviceName . Pact.contractProvider $ contract) ++ ".json"
       D.createDirectoryIfMissing True "pact"
       BL.writeFile fileName marshalledContract
-      respond $ W.responseLBS H.status200 [("Content-Type", "text/plain")] "Persist verified interactions as contract"
+      respond $ responseData fileName
 
     _ -> do
       putStrLn "Default handler"
@@ -115,8 +115,8 @@ providerService fakeProviderState request respond =
                                                          (Just body)    -> encode body
                                                          Nothing        -> ""
                                in W.responseLBS resStatus resHeaders resBody
-        (Left []) -> W.responseLBS H.status500 [("Content-Type", "application/json")] $ encodeAPIError APIErrorNoInteractionsConfigured
-        (Left failures) -> W.responseLBS H.status500 [("Content-Type", "application/json")] . encodeAPIError $ APIErrorNoInteractionMatch failures
+        (Left []) -> responseError APIErrorNoInteractionsConfigured
+        (Left failures) -> responseError $ APIErrorNoInteractionMatch failures
 
   where route = (W.requestMethod request, W.pathInfo request, isAdminRequest)
         isAdminRequest =
@@ -125,10 +125,32 @@ providerService fakeProviderState request respond =
                _ -> False
         hasAdminHeader (h, v) = CI.mk h == CI.mk "X-Pact-Mock-Service" && CI.mk v == CI.mk "True"
 
-data APIError = APIErrorNoInteractionsConfigured
-              | APIErrorNoInteractionMatch [(Pact.Interaction, [Pact.ValidationError])]
+responseData :: forall a. (ToJSON a) => a -> W.Response
+responseData dat = W.responseLBS H.status200 [("Content-Type", "application/json")] $ encodeAPI (APIResponseSuccess dat :: APIResponse a ())
 
+responseError :: APIError -> W.Response
+responseError err = W.responseLBS H.status500 [("Content-Type", "application/json")] $ encodeAPI (APIResponseFailure err :: APIResponse () APIError)
+
+encodeAPI :: (ToJSON a, ToJSON b) => APIResponse a b -> BL.ByteString
+encodeAPI resp = EP.encodePretty' encodeAPICfg resp
+  where
+    encodeAPICfg :: EP.Config
+    encodeAPICfg = EP.Config { EP.confIndent = 4, EP.confCompare = cmp }
+      where cmp = EP.keyOrder [ "name", "description", "interactions", "interaction", "failedValidations" ]
+
+data APIResponse a b = APIResponseSuccess a | APIResponseFailure b
+instance (ToJSON a, ToJSON b) => ToJSON (APIResponse a b) where
+  toJSON (APIResponseSuccess d) = object ["data" .= d]
+  toJSON (APIResponseFailure e) = object ["error" .= e]
+
+data APIError = APIErrorVerifyFailed
+              | APIErrorNoInteractionsConfigured
+              | APIErrorNoInteractionMatch [(Pact.Interaction, [Pact.ValidationError])]
 instance ToJSON APIError where
+  toJSON APIErrorVerifyFailed = object
+    [ "name" .= ("APIErrorVerifyFailed" :: String)
+    , "description" .= ("Verification failed" :: String)
+    ]
   toJSON APIErrorNoInteractionsConfigured = object
     [ "name" .= ("APIErrorNoInteractionsConfigured" :: String)
     , "description" .= ("No interactions are configured yet" :: String)
@@ -140,16 +162,3 @@ instance ToJSON APIError where
     ]
     where
       formatFailure (interaction, errors) = object ["interaction" .= interaction, "failedValidations" .= errors]
-
-encodeAPIError :: APIError -> BL.ByteString
-encodeAPIError err = EP.encodePretty' encodeAPIErrorCfg (APIResponseFailure err :: APIResponse () APIError)
-  where
-    encodeAPIErrorCfg :: EP.Config
-    encodeAPIErrorCfg = EP.Config { EP.confIndent = 4, EP.confCompare = cmp }
-      where cmp = EP.keyOrder [ "name", "description", "interactions", "interaction", "failedValidations" ]
-
-data APIResponse a b = APIResponseSuccess a | APIResponseFailure b
-
-instance (ToJSON a, ToJSON b) => ToJSON (APIResponse a b) where
-  toJSON (APIResponseSuccess d) = object ["data" .= d]
-  toJSON (APIResponseFailure e) = object ["error" .= e]
