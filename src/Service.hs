@@ -51,9 +51,8 @@ providerService fakeProviderState request respond =
       body <- W.strictRequestBody request
       let (Just interaction) = Aeson.decode body :: Maybe Pact.Interaction
       putStrLn (show interaction)
-      Provider.runDebug fakeProviderState $
-        Provider.addInteraction interaction
-      respond . responseData $ object ["interaction" .= interaction]
+      interactions <- Provider.runDebug fakeProviderState $ Provider.addInteraction interaction
+      respond . responseData $ object ["interactions" .= interactions]
 
     ("PUT", ["interactions"], True) -> do
       putStrLn "Set interactions"
@@ -73,10 +72,10 @@ providerService fakeProviderState request respond =
 
     ("GET", ["interactions", "verification"], True) -> do
       putStrLn "Verify interactions"
-      isSuccessful <- Provider.runDebug fakeProviderState $
+      (isSuccessful, mismatchedRequests, matchedInteractions, activeInteractions) <- Provider.runDebug fakeProviderState $
         Provider.verifyInteractions
       putStrLn (show $ isSuccessful)
-      respond $ if isSuccessful then responseData () else responseError APIErrorVerifyFailed
+      respond $ if isSuccessful then responseData Null else responseError $ APIErrorVerifyFailed mismatchedRequests matchedInteractions activeInteractions
 
     ("POST", ["pact"], True) -> do
       putStrLn "Write pact"
@@ -119,7 +118,7 @@ providerService fakeProviderState request respond =
                                                          Nothing        -> ""
                                in W.responseLBS resStatus resHeaders resBody
         (Left []) -> responseError APIErrorNoInteractionsConfigured
-        (Left failures) -> responseError $ APIErrorNoInteractionMatch failures
+        (Left failures) -> responseError $ APIErrorNoInteractionMatch inputRequest failures
 
   where route = (W.requestMethod request, W.pathInfo request, isAdminRequest)
         isAdminRequest =
@@ -139,28 +138,32 @@ encodeAPI resp = EP.encodePretty' encodeAPICfg resp
   where
     encodeAPICfg :: EP.Config
     encodeAPICfg = EP.Config { EP.confIndent = 4, EP.confCompare = EP.keyOrder cmp }
-      where cmp = [ "name", "description", "interactions", "interaction", "failedValidations" ] ++ keyOrder
+      where cmp = [ "name", "description", "incommingRequest", "interactions", "interaction", "failedValidations" ] ++ keyOrder
 
 data APIResponse a b = APIResponseSuccess a | APIResponseFailure b
 instance (ToJSON a, ToJSON b) => ToJSON (APIResponse a b) where
   toJSON (APIResponseSuccess d) = object ["data" .= d]
   toJSON (APIResponseFailure e) = object ["error" .= e]
 
-data APIError = APIErrorVerifyFailed
+data APIError = APIErrorVerifyFailed [Pact.Request] [Pact.Interaction] [Pact.Interaction]
               | APIErrorNoInteractionsConfigured
-              | APIErrorNoInteractionMatch [(Pact.Interaction, [Pact.ValidationError])]
+              | APIErrorNoInteractionMatch Pact.Request [(Pact.Interaction, [Pact.ValidationError])]
 instance ToJSON APIError where
-  toJSON APIErrorVerifyFailed = object
+  toJSON (APIErrorVerifyFailed mismatchedRequests matchedInteractions activeInteractions) = object
     [ "name" .= ("APIErrorVerifyFailed" :: String)
     , "description" .= ("Verification failed" :: String)
+    , "mismatchedRequests" .= mismatchedRequests
+    , "matchedInteractions" .= matchedInteractions
+    , "activeInteractions" .= activeInteractions
     ]
   toJSON APIErrorNoInteractionsConfigured = object
     [ "name" .= ("APIErrorNoInteractionsConfigured" :: String)
     , "description" .= ("No interactions are configured yet" :: String)
     ]
-  toJSON (APIErrorNoInteractionMatch failures) = object
+  toJSON (APIErrorNoInteractionMatch req failures) = object
     [ "name" .= ("APIErrorNoInteractionMatch" :: String)
     , "description" .= ("No matching interaction found" :: String)
+    , "incommingRequest" .= req
     , "interactions" .= map formatFailure failures
     ]
     where

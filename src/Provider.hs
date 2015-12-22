@@ -30,8 +30,10 @@ data FakeProvider = FakeProvider
 initialFakeProvider :: FakeProvider
 initialFakeProvider = FakeProvider [] [] [] []
 
-addInteraction :: P.Interaction -> State FakeProvider ()
-addInteraction i = modify $ \p -> p { activeInteractions = (i : activeInteractions p) }
+addInteraction :: P.Interaction -> State FakeProvider ([P.Interaction])
+addInteraction i = do
+  modify $ \p -> p { activeInteractions = (i : activeInteractions p) }
+  gets $ \p -> activeInteractions p
 
 setInteractions :: [P.Interaction] -> State FakeProvider ()
 setInteractions is = modify $ \p -> p { activeInteractions = is }
@@ -67,8 +69,10 @@ recordRequest req = do
       addMismatchedRequest req
       pure (Left failed)
 
-verifyInteractions :: State FakeProvider Bool
-verifyInteractions = gets $ \p -> (length $ mismatchedRequests p) == 0 && (length $ matchedInteractions p) == (length $ activeInteractions p)
+verifyInteractions :: State FakeProvider (Bool, [P.Request], [P.Interaction], [P.Interaction])
+verifyInteractions = gets $ \p ->
+  let isSuccess = (length $ mismatchedRequests p) == 0 && (length $ matchedInteractions p) == (length $ activeInteractions p)
+  in (isSuccess, mismatchedRequests p, matchedInteractions p, activeInteractions p) where
 
 getVerifiedInteractions :: State FakeProvider [P.Interaction]
 getVerifiedInteractions = gets verifiedInteractions
