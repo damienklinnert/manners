@@ -134,7 +134,7 @@ checkRequestTestCase file = do
   let (Just x) = decode content :: Maybe RequestTestCase
   let expectedVal = (requestExpected x)
   let actualVal = (requestActual x)
-  let success = ((validateRequest expectedVal actualVal) == []) == (requestMatch x)
+  let success = null (validateRequest expectedVal actualVal) == (requestMatch x)
   putStrLn $ (if success then "SUCCESS " else "FAIL ") ++ file ++ " - " ++ (requestComment x)
   when (not success) exitFailure
 
@@ -146,7 +146,7 @@ checkResponseTestCase file = do
   let actualVal = (responseActual x)
   print expectedVal
   print actualVal
-  let success = ((validateResponse expectedVal actualVal) == []) == (responseMatch x)
+  let success = null (validateResponse expectedVal actualVal) == (responseMatch x)
   putStrLn $ (if success then "SUCCESS " else "FAIL ") ++ file ++ " - " ++ (responseComment x)
   when (not success) exitFailure
 

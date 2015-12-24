@@ -44,7 +44,7 @@ runContract path baseUrl = do
 
     actualResponse <- performRequest baseUrl request
 
-    let success = P.validateResponse expectedResponse actualResponse == []
+    let success = null $ P.validateResponse expectedResponse actualResponse
     C.when (not success) $ do
       putStrLn "-- FAILURE"
       putStrLn "with request"

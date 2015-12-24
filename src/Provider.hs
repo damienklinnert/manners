@@ -59,7 +59,7 @@ addMismatchedRequest i = modify $ \p -> p { mismatchedRequests = (i : mismatched
 recordRequest :: P.Request -> State FakeProvider (Either [(P.Interaction, [P.ValidationError])] P.Interaction)
 recordRequest req = do
   interactions <- findInteractionForRequest req
-  let (successful, failed) = L.partition (\(_, errors) -> errors == []) interactions
+  let (successful, failed) = L.partition (null . snd) interactions
   case successful of
     -- we only care about the first match and ignore later matches
     ((interaction, _):_) -> do
