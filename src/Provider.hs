@@ -11,7 +11,7 @@ module Provider
  , getVerifiedInteractions
  , FakeProviderState
  , newFakeProviderState
- , runDebug
+ , run
  ) where
 
 import Control.Concurrent.STM
@@ -30,8 +30,10 @@ data FakeProvider = FakeProvider
 initialFakeProvider :: FakeProvider
 initialFakeProvider = FakeProvider [] [] [] []
 
-addInteraction :: P.Interaction -> State FakeProvider ()
-addInteraction i = modify $ \p -> p { activeInteractions = (i : activeInteractions p) }
+addInteraction :: P.Interaction -> State FakeProvider ([P.Interaction])
+addInteraction i = do
+  modify $ \p -> p { activeInteractions = (i : activeInteractions p) }
+  gets $ \p -> activeInteractions p
 
 setInteractions :: [P.Interaction] -> State FakeProvider ()
 setInteractions is = modify $ \p -> p { activeInteractions = is }
@@ -39,8 +41,11 @@ setInteractions is = modify $ \p -> p { activeInteractions = is }
 resetInteractions :: State FakeProvider ()
 resetInteractions = modify $ \p -> p { activeInteractions = [], mismatchedRequests = [], matchedInteractions = [] }
 
-findInteractionForRequest :: P.Request -> State FakeProvider (Maybe P.Interaction)
-findInteractionForRequest req = gets $ \p -> L.find (\i -> P.diffRequests (P.interactionRequest i) req) $ activeInteractions p
+findInteractionForRequest :: P.Request -> State FakeProvider ([(P.Interaction, [P.ValidationError])])
+findInteractionForRequest req = gets $ \p -> map toTuple $ activeInteractions p
+  where
+    toTuple :: P.Interaction -> (P.Interaction, [P.ValidationError])
+    toTuple interaction = (interaction, P.validateRequest (P.interactionRequest interaction) req)
 
 addInteractionMatch :: P.Interaction -> State FakeProvider ()
 addInteractionMatch i = modify $ \p -> p
@@ -51,16 +56,23 @@ addInteractionMatch i = modify $ \p -> p
 addMismatchedRequest :: P.Request -> State FakeProvider ()
 addMismatchedRequest i = modify $ \p -> p { mismatchedRequests = (i : mismatchedRequests p) }
 
-recordRequest :: P.Request -> State FakeProvider (Maybe P.Interaction)
+recordRequest :: P.Request -> State FakeProvider (Either [(P.Interaction, [P.ValidationError])] P.Interaction)
 recordRequest req = do
-  maybeInteraction <- findInteractionForRequest req
-  case maybeInteraction of
-    Just interaction -> addInteractionMatch interaction
-    Nothing -> addMismatchedRequest req
-  return maybeInteraction
+  interactions <- findInteractionForRequest req
+  let (successful, failed) = L.partition (null . snd) interactions
+  case successful of
+    -- we only care about the first match and ignore later matches
+    ((interaction, _):_) -> do
+      addInteractionMatch interaction
+      pure (Right interaction)
+    [] -> do
+      addMismatchedRequest req
+      pure (Left failed)
 
-verifyInteractions :: State FakeProvider Bool
-verifyInteractions = gets $ \p -> (length $ mismatchedRequests p) == 0 && (length $ matchedInteractions p) == (length $ activeInteractions p)
+verifyInteractions :: State FakeProvider (Bool, [P.Request], [P.Interaction], [P.Interaction])
+verifyInteractions = gets $ \p ->
+  let isSuccess = (length $ mismatchedRequests p) == 0 && (length $ matchedInteractions p) == (length $ activeInteractions p)
+  in (isSuccess, mismatchedRequests p, matchedInteractions p, activeInteractions p) where
 
 getVerifiedInteractions :: State FakeProvider [P.Interaction]
 getVerifiedInteractions = gets verifiedInteractions
@@ -79,8 +91,8 @@ liftTX m v = do
   writeTVar v s
   return (a, s)  
 
-runDebugTX :: FakeProviderState -> FakeProviderTX a -> IO a
-runDebugTX fps tx = atomically (tx fps) >>= \(a, s) -> print s >> return a
+runTX :: FakeProviderState -> FakeProviderTX a -> IO a
+runTX fps tx = atomically (tx fps) >>= \(a, _) -> pure a
 
-runDebug :: FakeProviderState -> State FakeProvider a -> IO a
-runDebug fps = runDebugTX fps . liftTX
+run :: FakeProviderState -> State FakeProvider a -> IO a
+run fps = runTX fps . liftTX

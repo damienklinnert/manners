@@ -8,9 +8,9 @@ module Pact
  , InteractionWrapper(..)
  , ServiceDescription(..)
  , ContractDescription(..)
- , Diff
- , diffRequests
- , diffResponses
+ , validateRequest
+ , validateResponse
+ , ValidationError(..)
  , convertHeadersToJson
  , convertHeadersFromJson
  ) where
@@ -30,7 +30,6 @@ import Data.Aeson
 import qualified Data.Aeson.Types as AT
 import qualified Network.HTTP.Types.Header as HTH
 import qualified Data.CaseInsensitive as CI
-import Data.Monoid (All(..))
 
 hasNullValue :: AT.Pair -> Bool
 hasNullValue (_, Null) = True
@@ -179,51 +178,82 @@ instance ToJSON ContractDescription where
    , "interactions" .= interactions
    ]
 
-type Diff = Bool
+data ValidationError = MethodValidationError String String
+                     | PathValidationError String String
+                     | QueryValidationError Query Query
+                     | StatusValidationError Int Int
+                     | HeaderValidationError Headers Headers
+                     | BodyValidationError Value Value
+                     deriving (Eq, Show)
 
-diffRequests :: Request -> Request -> Diff
-diffRequests expected actual = getAll $ foldMap All
- [ verifyMethod (requestMethod expected) (requestMethod actual)
- , verifyPath (requestPath expected) (requestPath actual)
- , verifyQuery (requestQuery expected) (requestQuery actual)
- , verifyHeaders (requestHeaders expected) (requestHeaders actual)
- , verifyBodyStrict (requestBody expected) (requestBody actual)
+instance ToJSON ValidationError where
+  toJSON (MethodValidationError e a) = object ["type" .= ("MethodValidationError" :: String), "expected" .= e, "actual" .= a]
+  toJSON (PathValidationError e a) = object ["type" .= ("PathValidationError" :: String), "expected" .= e, "actual" .= a]
+  toJSON (QueryValidationError e a) = object ["type" .= ("QueryValidationError" :: String), "expected" .= e, "actual" .= a]
+  toJSON (StatusValidationError e a) = object ["type" .= ("StatusValidationError" :: String), "expected" .= e, "actual" .= a]
+  toJSON (HeaderValidationError e a) = object ["type" .= ("HeaderValidationError" :: String), "expected" .= e, "actual" .= a]
+  toJSON (BodyValidationError e a) = object ["type" .= ("BodyValidationError" :: String), "expected" .= e, "actual" .= a]
+
+validateRequest :: Request -> Request -> [ValidationError]
+validateRequest expected actual = concat
+ [ validateMethod (requestMethod expected) (requestMethod actual)
+ , validatePath (requestPath expected) (requestPath actual)
+ , validateQuery (requestQuery expected) (requestQuery actual)
+ , validateHeaders (requestHeaders expected) (requestHeaders actual)
+ , validateBodyStrict (requestBody expected) (requestBody actual)
  ]
 
-diffResponses :: Response -> Response -> Diff
-diffResponses expected actual = foldl1 (&&)
- [ verifyStatus (responseStatus expected) (responseStatus actual)
- , verifyHeaders (responseHeaders expected) (responseHeaders actual)
- , verifyBody (responseBody expected) (responseBody actual)
+validateResponse :: Response -> Response -> [ValidationError]
+validateResponse expected actual = concat
+ [ validateStatus (responseStatus expected) (responseStatus actual)
+ , validateHeaders (responseHeaders expected) (responseHeaders actual)
+ , validateBody (responseBody expected) (responseBody actual)
  ]
 
-verifyMethod :: String -> String -> Diff
-verifyMethod expected actual = uppercase expected == uppercase actual
-  where uppercase = map toUpper
+validateMethod :: String -> String -> [ValidationError]
+validateMethod expected actual
+  | upperE == upperA = []
+  | otherwise        = [MethodValidationError upperE upperA]
+  where upperE = map toUpper expected
+        upperA = map toUpper actual
 
-verifyPath :: String -> String -> Diff
-verifyPath = (==)
+validatePath :: String -> String -> [ValidationError]
+validatePath expected actual
+  | expected == actual = []
+  | otherwise          = [PathValidationError expected actual]
 
-verifyQuery :: Query -> Query -> Diff
-verifyQuery (Query expected) (Query actual) = toQ expected == toQ actual
+validateQuery :: Query -> Query -> [ValidationError]
+validateQuery (Query expected) (Query actual)
+  | saneE == saneA = []
+  | otherwise      = [QueryValidationError (Query saneE) (Query saneA)]
   where toQ s = L.sortOn fst s
+        saneE = toQ expected
+        saneA = toQ actual
 
-verifyHeaders :: Headers -> Headers -> Diff
-verifyHeaders (Headers expected) (Headers actual) = sanitize expected == (L.intersect (sanitize actual) (sanitize expected))
+validateHeaders :: Headers -> Headers -> [ValidationError]
+validateHeaders (Headers expected) (Headers actual)
+  | saneE == (L.intersect (saneA) (saneE)) = []
+  | otherwise                              = [HeaderValidationError (Headers saneE) (Headers saneA)]
   where sanitize obj = map (\(k,v) -> (toLower <$> k, fixValue v)) obj
         fixValue = filter (/= ' ')
+        saneE = sanitize expected
+        saneA = sanitize actual
 
-verifyBodyStrict :: Maybe Value -> Maybe Value -> Diff
-verifyBodyStrict Nothing _ = True
-verifyBodyStrict (Just _) Nothing = False
-verifyBodyStrict (Just expected) (Just actual) = expectedObj == actualObj
+validateBodyStrict :: Maybe Value -> Maybe Value -> [ValidationError]
+validateBodyStrict Nothing _ = []
+validateBodyStrict (Just expected) Nothing = [BodyValidationError expected Null]
+validateBodyStrict (Just expected) (Just actual)
+  | expectedObj == actualObj = []
+  | otherwise                = [BodyValidationError expected actual]
   where expectedObj = HM.fromList [("value" :: String, expected :: Value)]
-        actualObj = HM.fromList [("value" :: String, actual :: Value)]
+        actualObj   = HM.fromList [("value" :: String, actual   :: Value)]
 
-verifyBody :: Maybe Value -> Maybe Value -> Diff
-verifyBody Nothing _ = True
-verifyBody (Just _) Nothing = False
-verifyBody (Just expected) (Just actual) = expectedObj == intersect actualObj expectedObj
+validateBody :: Maybe Value -> Maybe Value -> [ValidationError]
+validateBody Nothing _ = []
+validateBody (Just expected) Nothing = [BodyValidationError expected Null]
+validateBody (Just expected) (Just actual)
+  | expectedObj == intersect actualObj expectedObj = []
+  | otherwise                                      = [BodyValidationError expected actual]
   where expectedObj = Object $ HM.fromList [("value" :: T.Text, expected :: Value)]
         actualObj = Object $ HM.fromList [("value" :: T.Text, actual :: Value)]
         intersect :: Value -> Value -> Value
@@ -233,10 +263,12 @@ verifyBody (Just expected) (Just actual) = expectedObj == intersect actualObj ex
            $ HM.intersection vals filts
         intersect x _ = x
 
-verifyStatus :: Maybe Int -> Maybe Int -> Diff
-verifyStatus Nothing _ = True
-verifyStatus (Just _) Nothing = False
-verifyStatus(Just expected) (Just actual) = expected == actual
+validateStatus :: Maybe Int -> Maybe Int -> [ValidationError]
+validateStatus Nothing _ = []
+validateStatus (Just _) Nothing = error "Can't validate status without an actual value"
+validateStatus(Just expected) (Just actual)
+  | expected == actual = []
+  | otherwise          = [StatusValidationError expected actual]
 
 convertHeadersToJson :: [HTH.Header] -> Headers
 convertHeadersToJson headers = Headers $ map toTextPair headers
