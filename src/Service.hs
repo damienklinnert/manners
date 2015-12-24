@@ -15,6 +15,7 @@ import qualified Data.Aeson.Encode.Pretty as EP
 import qualified Network.Wai as W
 import qualified Network.HTTP.Types as H
 import qualified Network.Wai.Handler.Warp as Warp
+import qualified Network.Wai.Middleware.RequestLogger as RequestLogger
 import qualified System.Directory as D
 import qualified Data.CaseInsensitive as CI
 
@@ -39,21 +40,19 @@ runProviderService p = do
   putStrLn $ "manners: listening on port " ++ (show p)
   hFlush stdout
   fakeProviderState <- Provider.newFakeProviderState
-  Warp.run p (providerService fakeProviderState)
+  Warp.run p (RequestLogger.logStdoutDev (providerService fakeProviderState))
 
 providerService :: Provider.FakeProviderState -> W.Application
 providerService fakeProviderState request respond =
   case route of
 
     ("POST", ["interactions"], True) -> do
-      putStrLn "manners: add an interaction"
       body <- W.strictRequestBody request
       let (Just interaction) = Aeson.decode body :: Maybe Pact.Interaction
       interactions <- Provider.run fakeProviderState $ Provider.addInteraction interaction
       respond . responseData $ object ["interactions" .= interactions]
 
     ("PUT", ["interactions"], True) -> do
-      putStrLn "manners: set all interactions"
       body <- W.strictRequestBody request
       let (Just interactionWrapper) = Aeson.decode body :: Maybe Pact.InteractionWrapper
       let interactions = Pact.wrapperInteractions interactionWrapper
@@ -62,19 +61,16 @@ providerService fakeProviderState request respond =
       respond . responseData $ object ["interactions" .= interactions]
 
     ("DELETE", ["interactions"], True) -> do
-      putStrLn "manners: reset interactions"
       Provider.run fakeProviderState $
         Provider.resetInteractions
       respond . responseData $ object ["interactions" .= ()]
 
     ("GET", ["interactions", "verification"], True) -> do
-      putStrLn "manners: verify interactions"
       (isSuccessful, mismatchedRequests, matchedInteractions, activeInteractions) <- Provider.run fakeProviderState $
         Provider.verifyInteractions
       respond $ if isSuccessful then responseData Null else responseError $ APIErrorVerifyFailed mismatchedRequests matchedInteractions activeInteractions
 
     ("POST", ["pact"], True) -> do
-      putStrLn "manners: write contract"
       body <- W.strictRequestBody request
       let (Just contractDesc) = Aeson.decode body :: Maybe Pact.ContractDescription
       verifiedInteractions <- Provider.run fakeProviderState $ Provider.getVerifiedInteractions
@@ -86,7 +82,6 @@ providerService fakeProviderState request respond =
       respond $ responseData (object ["contractPath" .= fileName, "contract" .= contract])
 
     _ -> do
-      putStrLn "manners: default handler"
       encodedBody <- W.strictRequestBody request
       let inMethod = C.unpack $ W.requestMethod request
       let inPath = filter (/='?') $ C.unpack $ W.rawPathInfo request

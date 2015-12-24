@@ -28,6 +28,7 @@ library
                      , unordered-containers
                      , warp
                      , wai
+                     , wai-extra
                      , text
                      , directory
                      , case-insensitive
