@@ -1,6 +1,16 @@
 # manners changelog
 
+## 0.3.0.0
+
+### Features
+
+- adds initial versions of request and response validation
+- exports the validation data via rest api
+- replaces verbose logging to stdout with access logging
+
 ## 0.2.1.0
+
+### Fixes
 
 - Fixes #23 (Service Tests Are Flakey)
 

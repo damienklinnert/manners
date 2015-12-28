@@ -55,7 +55,7 @@ usage = putStrLn $ opts ++ cmds
     cmds = "\nCommands:\n    fake-provider\tStart a provider mock service\n    fake-consumer\tRun a fake consumer\n\n"
 
 version :: IO ()
-version = putStrLn "manners version 0.2.1.0"
+version = putStrLn "manners version 0.3.0.0"
 
 fakeProvider :: IO ()
 fakeProvider = Service.runProviderService 1234
