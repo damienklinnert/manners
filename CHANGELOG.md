@@ -1,5 +1,9 @@
 # manners changelog
 
+## 0.2.1.0
+
+- Fixes #23 (Service Tests Are Flakey)
+
 ## 0.2.0.0
 
 ### Features
