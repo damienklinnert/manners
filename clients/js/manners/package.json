@@ -1,6 +1,6 @@
 {
   "name": "manners",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Get your services behaved",
   "main": "index.js",
   "scripts": {
@@ -21,6 +21,6 @@
   "homepage": "https://github.com/mannersio/manners#readme",
   "dependencies": {
     "axios": "^0.8.1",
-    "manners-bin": "^0.2.0"
+    "manners-bin": "^0.3.0"
   }
 }
