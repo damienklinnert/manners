@@ -8,6 +8,7 @@ import qualified System.Exit as S
 import qualified Data.CaseInsensitive as CI
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.Aeson as A
+import qualified Data.Text as T
 import qualified Pact as P
 import qualified Control.Monad as C
 import qualified Data.Maybe as M
@@ -39,6 +40,9 @@ runContract path baseUrl = do
       , M.fromMaybe "" (P.interactionState i)
       , "'"
       ]
+
+    setupState $ P.interactionState i
+
     let request = P.interactionRequest i
     let expectedResponse = P.interactionResponse i
 
@@ -54,6 +58,19 @@ runContract path baseUrl = do
       putStrLn "actual response"
       print actualResponse
       S.exitFailure
+
+    teardownState $ P.interactionState i
+
+setupState :: Maybe String -> IO ()
+setupState (Just state) = W.post "http://localhost:2345/post" (getPayload "setup" state) >> pure ()
+setupState Nothing      = W.post "http://localhost:2345/post" (getPayload "setup" "__MANNERS_DEFAULT_STATE__") >> pure ()
+
+teardownState :: Maybe String -> IO ()
+teardownState (Just state) = W.post "http://localhost:2345/post" (getPayload "teardown" state) >> pure ()
+teardownState Nothing      = W.post "http://localhost:2345/post" (getPayload "teardown" "__MANNERS_DEFAULT_STATE__") >> pure ()
+
+getPayload :: T.Text -> String -> BL.ByteString
+getPayload hook state = A.encode $ A.object [(A..=) "type" (A.String hook), (A..=) "state" (A.String (T.pack state))]
 
 performRequest :: BaseUrl -> P.Request -> IO P.Response
 performRequest baseUrl req = performMethod method url opts body
