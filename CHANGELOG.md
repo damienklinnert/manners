@@ -1,5 +1,11 @@
 # manners changelog
 
+## 0.4.0.0
+
+### Features
+
+- Fake Consumer now requires a helper service to setup states from the contract
+
 ## 0.3.0.0
 
 ### Features
