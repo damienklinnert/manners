@@ -1,6 +1,6 @@
-# manners [![Build Status](https://travis-ci.org/mannersio/manners.svg?branch=master)](https://travis-ci.org/mannersio/manners)
+# manners - get your services behaved [![Build Status](https://travis-ci.org/mannersio/manners.svg?branch=master)](https://travis-ci.org/mannersio/manners)
 
-Get your services behaved.
+A framework for fast, reliable and meaningful API testing powered by consumer-driven contracts.
 
 ## Installation
 
