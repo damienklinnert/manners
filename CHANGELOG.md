@@ -1,5 +1,11 @@
 # manners changelog
 
+## 0.4.1.0
+
+### Fixes
+
+- Fixes #27 (Independent header order)
+
 ## 0.4.0.0
 
 ### Features
