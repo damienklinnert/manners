@@ -234,7 +234,7 @@ validateHeaders :: Headers -> Headers -> [ValidationError]
 validateHeaders (Headers expected) (Headers actual)
   | saneE == (L.intersect (saneA) (saneE)) = []
   | otherwise                              = [HeaderValidationError (Headers saneE) (Headers saneA)]
-  where sanitize obj = map (\(k,v) -> (toLower <$> k, fixValue v)) obj
+  where sanitize obj = L.sortOn fst $ map (\(k,v) -> (toLower <$> k, fixValue v)) obj
         fixValue = filter (/= ' ')
         saneE = sanitize expected
         saneA = sanitize actual
@@ -272,7 +272,7 @@ validateStatus(Just expected) (Just actual)
 
 convertHeadersToJson :: [HTH.Header] -> Headers
 convertHeadersToJson headers = Headers $ map toTextPair headers
-  where toTextPair (k, v) = (T.unpack . E.decodeUtf8 $ CI.foldedCase k, T.unpack $ E.decodeUtf8 v)
+  where toTextPair (k, v) = (CS.unpack $ CI.foldedCase k, CS.unpack v)
 
 convertHeadersFromJson :: Headers -> [HTH.Header]
 convertHeadersFromJson (Headers hs) = map fromTextPair $ hs

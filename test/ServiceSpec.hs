@@ -212,3 +212,26 @@ main = hspec $ around_ withFakeProvider $ do
 
       -- generated contract should match the model byte by byte (to play nicely with vcs)
       modelContents `shouldBe` generatedContents
+
+    it "regression test for #27 - headers are verified independent of order" $ do
+      let r1Headers = (Pact.Headers [("x-header", "here"), ("content-type", "application/json")])
+      let r1Body = encode $ Pact.InteractionWrapper
+                         [ Pact.Interaction
+                           "a request for hello"
+                           Nothing
+                           (Pact.Request "get" "/sayHello" mempty r1Headers Nothing)
+                           (Pact.Response
+                             (Just 200)
+                             (Pact.Headers [("Content-Type", "application/json")])
+                             (Just $ Object $ HM.fromList [("reply", String "Hello")]))
+                         ]
+      r1 <- putWith adminOpts "http://localhost:2345/interactions" r1Body
+      (r1 ^. responseStatus . statusCode) `shouldBe` 200
+
+      let r2Opts = (allowServerErrorOpts &
+                      header "x-header" .~ ["here"] &
+                      header "content-type" .~ ["application/json"])
+
+      r2 <- getWith r2Opts "http://localhost:2345/sayHello"
+      (r2 ^. responseStatus . statusCode) `shouldBe` 200
+      (decode (r2 ^. responseBody)) `shouldBe` (Just $ Object $ HM.fromList [("reply", String "Hello")])
