@@ -29,7 +29,7 @@ Here's a couple of places to get more information in case you get stuck:
 - [bug tracker](https://github.com/mannersio/manners/issues)
 - [source code](https://github.com/mannersio/manners)
 - [documentation](https://github.com/mannersio/manners/wiki)
-- mailing list
+- [mailing list](https://groups.google.com/forum/#!forum/manners-contract-testing)
 
 
 ## Installation
