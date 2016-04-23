@@ -235,3 +235,8 @@ main = hspec $ around_ withFakeProvider $ do
       r2 <- getWith r2Opts "http://localhost:2345/sayHello"
       (r2 ^. responseStatus . statusCode) `shouldBe` 200
       (decode (r2 ^. responseBody)) `shouldBe` (Just $ Object $ HM.fromList [("reply", String "Hello")])
+
+    it "regression test for #30 - fake-provider throws unhandled exception on json decoding error" $ do
+      let r1Body = BLC.pack "{ faulty }"
+      r1 <- putWith adminOpts "http://localhost:2345/interactions" r1Body
+      (r1 ^. responseStatus . statusCode) `shouldBe` 500

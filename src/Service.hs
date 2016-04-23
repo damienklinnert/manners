@@ -48,17 +48,27 @@ providerService fakeProviderState request respond =
 
     ("POST", ["interactions"], True) -> do
       body <- W.strictRequestBody request
-      let (Just interaction) = Aeson.decode body :: Maybe Pact.Interaction
-      interactions <- Provider.run fakeProviderState $ Provider.addInteraction interaction
-      respond . responseData $ object ["interactions" .= interactions]
+
+      let maybeInteraction = Aeson.decode body :: Maybe Pact.Interaction
+      case maybeInteraction of
+        Just interaction -> do
+          interactions <- Provider.run fakeProviderState $ Provider.addInteraction interaction
+          respond . responseData $ object ["interactions" .= interactions]
+        Nothing ->
+          respond $ responseError APIErrorInvalidInput
 
     ("PUT", ["interactions"], True) -> do
       body <- W.strictRequestBody request
-      let (Just interactionWrapper) = Aeson.decode body :: Maybe Pact.InteractionWrapper
-      let interactions = Pact.wrapperInteractions interactionWrapper
-      Provider.run fakeProviderState $
-        Provider.setInteractions interactions
-      respond . responseData $ object ["interactions" .= interactions]
+
+      let maybeInteractionWrapper = Aeson.decode body :: Maybe Pact.InteractionWrapper
+      case maybeInteractionWrapper of
+        Just interactionWrapper -> do
+          let interactions = Pact.wrapperInteractions interactionWrapper
+          Provider.run fakeProviderState (Provider.setInteractions interactions)
+          respond . responseData $ object ["interactions" .= interactions]
+
+        Nothing ->
+          respond $ responseError APIErrorInvalidInput
 
     ("DELETE", ["interactions"], True) -> do
       Provider.run fakeProviderState $
@@ -72,14 +82,19 @@ providerService fakeProviderState request respond =
 
     ("POST", ["pact"], True) -> do
       body <- W.strictRequestBody request
-      let (Just contractDesc) = Aeson.decode body :: Maybe Pact.ContractDescription
-      verifiedInteractions <- Provider.run fakeProviderState $ Provider.getVerifiedInteractions
-      let contract = contractDesc { Pact.contractInteractions = reverse verifiedInteractions }
-      let marshalledContract = EP.encodePretty' encodePrettyCfg contract
-      let fileName = "pact/" ++ (Pact.serviceName . Pact.contractConsumer $ contract) ++ "-" ++ (Pact.serviceName . Pact.contractProvider $ contract) ++ ".json"
-      D.createDirectoryIfMissing True "pact"
-      BL.writeFile fileName marshalledContract
-      respond $ responseData (object ["contractPath" .= fileName, "contract" .= contract])
+
+      let maybeContractDesc = Aeson.decode body :: Maybe Pact.ContractDescription
+      case maybeContractDesc of
+        Just contractDesc -> do
+          verifiedInteractions <- Provider.run fakeProviderState $ Provider.getVerifiedInteractions
+          let contract = contractDesc { Pact.contractInteractions = reverse verifiedInteractions }
+          let marshalledContract = EP.encodePretty' encodePrettyCfg contract
+          let fileName = "pact/" ++ (Pact.serviceName . Pact.contractConsumer $ contract) ++ "-" ++ (Pact.serviceName . Pact.contractProvider $ contract) ++ ".json"
+          D.createDirectoryIfMissing True "pact"
+          BL.writeFile fileName marshalledContract
+          respond $ responseData (object ["contractPath" .= fileName, "contract" .= contract])
+        Nothing ->
+          respond $ responseError APIErrorInvalidInput
 
     _ -> do
       encodedBody <- W.strictRequestBody request
@@ -87,7 +102,7 @@ providerService fakeProviderState request respond =
       let inPath = filter (/='?') $ C.unpack $ W.rawPathInfo request
       let inQuery = Pact.Query $ H.parseSimpleQuery $ W.rawQueryString request
       let inHeaders = Pact.convertHeadersToJson $ W.requestHeaders request
-      let inBody = decode encodedBody
+      let inBody = Aeson.decode encodedBody
       let inputRequest = Pact.Request inMethod inPath inQuery inHeaders inBody
 
       eitherInteraction <- Provider.run fakeProviderState $ Provider.recordRequest inputRequest
@@ -130,10 +145,16 @@ instance (ToJSON a, ToJSON b) => ToJSON (APIResponse a b) where
   toJSON (APIResponseSuccess d) = object ["data" .= d]
   toJSON (APIResponseFailure e) = object ["error" .= e]
 
-data APIError = APIErrorVerifyFailed [Pact.Request] [Pact.Interaction] [Pact.Interaction]
+data APIError = APIErrorInvalidInput
+              | APIErrorVerifyFailed [Pact.Request] [Pact.Interaction] [Pact.Interaction]
               | APIErrorNoInteractionsConfigured
               | APIErrorNoInteractionMatch Pact.Request [(Pact.Interaction, [Pact.ValidationError])]
+
 instance ToJSON APIError where
+  toJSON APIErrorInvalidInput = object
+    [ "name" .= ("APIErrorInvalidInput" :: String)
+    , "description" .= ("The request is invalid or malformed" :: String)
+    ]
   toJSON (APIErrorVerifyFailed mismatchedRequests matchedInteractions activeInteractions) = object
     [ "name" .= ("APIErrorVerifyFailed" :: String)
     , "description" .= ("Verification failed" :: String)
