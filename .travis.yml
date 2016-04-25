@@ -18,5 +18,4 @@ install:
   - stack test --no-terminal  --only-snapshot
 
 script:
-  - cd cli
   - stack test --no-terminal
