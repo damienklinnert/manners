@@ -30,7 +30,7 @@ instance FromJSON ResponseTestCase where
   parseJSON _ = error "could not parse ResponseTestCase"
 
 testBase :: String
-testBase = "resources/pact_specification_v1.1/testcases"
+testBase = "../resources/pact_specification_v1.1/testcases"
 
 requestTestBase :: String
 requestTestBase = testBase ++ "/request"
