@@ -65,6 +65,9 @@ InteractionGroup.prototype.setup = function (readyFn) {
       fn(err);
     }
   };
+  var cleanup = function () {
+    return axios.delete(cfg.baseUrl + '/interactions', axiosCfg);
+  };
 
   return axios
     .put(cfg.baseUrl + '/interactions', { interactions: this._interactions }, axiosCfg)
@@ -85,9 +88,15 @@ InteractionGroup.prototype.setup = function (readyFn) {
       var msg = 'Verification failed with error:\n' + JSON.stringify(err.data.error, null, 2);
       throw new ProviderError(msg);
     }))
-    .then(function () {
-      return axios.delete(cfg.baseUrl + '/interactions', axiosCfg);
-    })
+    .then(
+      function () {
+        return cleanup();
+      }, function (err) {
+        return cleanup().then(function () {
+          throw err;
+        });
+      }
+    )
     .catch(rethrow(function (err) {
       throw new ProviderError('Cleaning up interactions failed');
     }))
