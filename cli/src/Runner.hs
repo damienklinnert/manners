@@ -10,6 +10,8 @@ import qualified Data.ByteString.Lazy as BL
 import qualified Data.Aeson as A
 import qualified Data.Text as T
 import qualified Pact as P
+import qualified Pretty
+import qualified Text.PrettyPrint.ANSI.Leijen as Pretty
 import qualified Control.Monad as C
 import qualified Data.Maybe as M
 import qualified Network.Wreq as W
@@ -22,23 +24,18 @@ runContract :: Path -> BaseUrl -> IO ()
 runContract path baseUrl = do
   contents <- BL.readFile path
   let (Just contract) = A.decode contents :: Maybe P.ContractDescription
-  putStrLn $ "using contract at " ++ path
-  putStrLn $ foldl1 (++)
-    [ "a contract between '"
-    , (P.serviceName . P.contractConsumer $ contract)
-    , "' and '"
-    , (P.serviceName . P.contractProvider $ contract)
-    , "'"
+  Pretty.putDoc $ mconcat
+    [ Pretty.indent 2 $ Pretty.contractStart path contract
+    , Pretty.line
+    , Pretty.line
     ]
 
   let interactions = P.contractInteractions contract
   C.forM_ interactions $ \i -> do
-    putStrLn $ foldl1 (++)
-      [ "verifying '"
-      , (P.interactionDescription i)
-      , "' with state '"
-      , M.fromMaybe "" (P.interactionState i)
-      , "'"
+    Pretty.putDoc $ mconcat
+      [ Pretty.indent 4 $ Pretty.verifyStart i
+      , Pretty.line
+      , Pretty.line
       ]
 
     setupState $ P.interactionState i
@@ -48,15 +45,13 @@ runContract path baseUrl = do
 
     actualResponse <- performRequest baseUrl request
 
-    let success = null $ P.validateResponse expectedResponse actualResponse
-    C.when (not success) $ do
-      putStrLn "-- FAILURE"
-      putStrLn "with request"
-      print $ request
-      putStrLn "expected response"
-      print expectedResponse
-      putStrLn "actual response"
-      print actualResponse
+    let errors = P.validateResponse expectedResponse actualResponse
+    C.when (not $ null errors) $ do
+      Pretty.putDoc $ mconcat
+        [ Pretty.indent 8 $ Pretty.validationErrors errors
+        , Pretty.line
+        , Pretty.line
+        ]
       S.exitFailure
 
     teardownState $ P.interactionState i

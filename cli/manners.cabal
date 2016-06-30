@@ -19,10 +19,12 @@ library
                      , Runner
                      , Pact
   other-modules:       Provider
+                     , Pretty
   ghc-options:         -Wall -Werror
   build-depends:       base >= 4.7 && < 5
                      , aeson
                      , aeson-pretty
+                     , ansi-wl-pprint
                      , bytestring
                      , http-types
                      , unordered-containers
