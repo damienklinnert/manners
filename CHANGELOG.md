@@ -1,5 +1,11 @@
 # manners changelog
 
+## 0.5.0.0
+
+### Features
+
+- Prettify fake-consumer output
+
 ## 0.4.1.0
 
 ### Fixes
