@@ -1,6 +1,6 @@
 {
   "name": "manners-bin",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Binary wrapper for manners",
   "main": "index.js",
   "bin": {
