@@ -3,7 +3,7 @@
 var path = require('path');
 var BinWrapper = require('bin-wrapper');
 
-var BASE = 'https://github.com/mannersio/manners/releases/download/v0.4.1.0/';
+var BASE = 'https://github.com/mannersio/manners/releases/download/v0.5.0.0/';
 
 var filePathForPlatform = function (platform) {
   var p = { darwin: '-osx', linux: '-linux' }[platform];
