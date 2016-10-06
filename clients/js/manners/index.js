@@ -58,7 +58,10 @@ InteractionGroup.prototype.add = function (interaction) {
 
 InteractionGroup.prototype.setup = function (readyFn) {
   var cfg = this._cfg;
-  var axiosCfg = { headers: { 'X-Pact-Mock-Service': 'True' } };
+  var axiosCfg = {
+    timeout: 500,
+    headers: { 'X-Pact-Mock-Service': 'True' }
+  };
   var rethrow = function (fn) {
     return function (err) {
       if (err instanceof ProviderError) { throw err; }
