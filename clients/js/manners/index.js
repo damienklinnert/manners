@@ -111,7 +111,7 @@ InteractionGroup.prototype.setup = function (readyFn) {
       return axios.post(cfg.baseUrl + '/pact', contract, axiosCfg);
     })
     .catch(rethrow(function (err) {
-      throw new ProviderError('Could not write contract');
+      throw new ProviderError('Could not write contract:\n' + err);
     }));
 };
 
