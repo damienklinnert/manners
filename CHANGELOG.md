@@ -1,5 +1,11 @@
 # manners changelog
 
+## 0.5.0.1
+
+### Fixes
+
+- Use IP instead of hostname when starting the mock server
+
 ## 0.5.0.0
 
 ### Features
