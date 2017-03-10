@@ -3,11 +3,12 @@
 var path = require('path');
 var BinWrapper = require('bin-wrapper');
 
-var BASE = 'https://github.com/mannersio/manners/releases/download/v0.5.0.0/';
+var VERSION = '0.5.0.1';
+var BASE = 'https://github.com/mannersio/manners/releases/download/v' + VERSION + '/';
 
 var filePathForPlatform = function (platform) {
   var p = { darwin: '-osx', linux: '-linux' }[platform];
-  return 'manners-0.5.0.0-x86_64' + p;
+  return 'manners-' + VERSION + '-x86_64' + p;
 };
 
 module.exports = new BinWrapper()
