@@ -57,12 +57,12 @@ runContract path baseUrl = do
     teardownState $ P.interactionState i
 
 setupState :: Maybe String -> IO ()
-setupState (Just state) = W.post "http://localhost:2345/post" (getPayload "setup" state) >> pure ()
-setupState Nothing      = W.post "http://localhost:2345/post" (getPayload "setup" "__MANNERS_DEFAULT_STATE__") >> pure ()
+setupState (Just state) = W.post "http://127.0.0.1:2345/post" (getPayload "setup" state) >> pure ()
+setupState Nothing      = W.post "http://127.0.0.1:2345/post" (getPayload "setup" "__MANNERS_DEFAULT_STATE__") >> pure ()
 
 teardownState :: Maybe String -> IO ()
-teardownState (Just state) = W.post "http://localhost:2345/post" (getPayload "teardown" state) >> pure ()
-teardownState Nothing      = W.post "http://localhost:2345/post" (getPayload "teardown" "__MANNERS_DEFAULT_STATE__") >> pure ()
+teardownState (Just state) = W.post "http://127.0.0.1:2345/post" (getPayload "teardown" state) >> pure ()
+teardownState Nothing      = W.post "http://127.0.0.1:2345/post" (getPayload "teardown" "__MANNERS_DEFAULT_STATE__") >> pure ()
 
 getPayload :: T.Text -> String -> BL.ByteString
 getPayload hook state = A.encode $ A.object [(A..=) "type" (A.String hook), (A..=) "state" (A.String (T.pack state))]
