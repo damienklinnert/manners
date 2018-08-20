@@ -1,4 +1,6 @@
-# manners - get your services behaved [![Build Status](https://travis-ci.org/mannersio/manners.svg?branch=master)](https://travis-ci.org/mannersio/manners)
+# This project is DEPRECATED and will no longer be maintained
+
+## manners - get your services behaved [![Build Status](https://travis-ci.org/mannersio/manners.svg?branch=master)](https://travis-ci.org/mannersio/manners)
 
 A framework for fast, reliable and meaningful API testing powered by consumer-driven contracts.
 
